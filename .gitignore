@@ -1,4 +1,21 @@
-.DS_Store
-node_modules/
+# TAGSENSE / Neon
 .neon
 .env.local
+.env*.local
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# dependencies
+/node_modules
+
+# vercel
+.vercel
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
