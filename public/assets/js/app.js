@@ -179,7 +179,10 @@ accessBtn.addEventListener('click', async () => {
       const resuelto = await resolverActivoEscaneado(idPendiente, { origen: 'nfc-url' });
       if (!resuelto) mostrarHintLectura('No se pudo cargar el activo del tag. Intenta de nuevo o usa QR.');
     } else {
-      goTo('step-confirm-2');
+      // Login normal, sin tag ni activo ya resuelto: hay que escanear algo primero.
+      // (goTo('step-confirm-2') aquí sin datos reales era un resabio del mock viejo.)
+      goTo('step-read');
+      iniciarModoLectura();
     }
   } catch (err) {
     mostrarErrorLogin('No se pudo conectar con el servidor. Intenta nuevamente.');
@@ -282,7 +285,7 @@ document.getElementById('back-to-read').addEventListener('click', () => {
 document.getElementById('tile-info-general').addEventListener('click', () => goTo('step-info-general'));
 document.getElementById('back-to-ficha').addEventListener('click', () => goTo('step-confirm-3'));
 
-document.getElementById('tile-historial').addEventListener('click', () => goTo('step-historial'));
+document.getElementById('tile-historial').addEventListener('click', () => { goTo('step-historial'); cargarHistorial(); });
 document.getElementById('back-historial').addEventListener('click', () => goTo('step-confirm-3'));
 
 document.getElementById('tile-documentos').addEventListener('click', () => goTo('step-documentos'));
@@ -2177,10 +2180,70 @@ function calcularDuracion(hi, ht){
   return `${hh}h ${mm}min`;
 }
 
+// ================= PERSISTENCIA DEL INFORME (backend real) =================
+// El PDF se sigue generando en el navegador (jsPDF) — se queda offline-first,
+// nunca bloqueado por la red (ver skill offline-sync). Guardar en el backend es
+// "mejor esfuerzo": si falla o no hay conexión, el técnico igual se lleva su PDF,
+// y se avisa con un hint no bloqueante en vez de fallar en silencio.
+async function guardarInformeEnBackend(data, pdfDoc){
+  const hintEl = document.getElementById('informe-sync-hint');
+  const mostrarHint = (texto) => { if (hintEl) { hintEl.textContent = texto; hintEl.classList.remove('hidden'); } };
+
+  if (!navigator.onLine) {
+    mostrarHint('Informe generado localmente. Se guardará en el servidor cuando vuelva la conexión.');
+    return;
+  }
+
+  try {
+    const intervencionResp = await fetch('/api/interventions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag_code: data.equipoId,
+        diagnosis: data.fallas || null,
+        work_performed: data.descripcion || null,
+        parts_used: { usados: data.repuestosUsados, detalle: data.repuestosDetalle || null },
+        started_at: data.horaInicio ? new Date(`${data.fecha}T${data.horaInicio}`).toISOString() : new Date().toISOString(),
+        finished_at: data.horaTermino ? new Date(`${data.fecha}T${data.horaTermino}`).toISOString() : null,
+        operational_after: data.operativo,
+        details: {
+          severidad: data.severidad,
+          horometro: data.horometro,
+          observaciones: data.observaciones,
+          alcances: data.alcances,
+          instructivosUsados: data.instructivosUsados,
+          instructivosNombres: data.instructivosNombres,
+          componente: data.componente,
+          empresa: data.empresa,
+          solicitudMantenimiento: data.smAplica ? {
+            folio: data.smFolio, tipo: data.smTipo, prioridad: data.smPrioridad,
+            componente: data.smComponente, descripcion: data.smDescripcion,
+          } : null,
+        },
+      }),
+    });
+    if (!intervencionResp.ok) { mostrarHint('No se pudo guardar el informe en el servidor. El PDF se descargó igual.'); return; }
+    const intervencion = await intervencionResp.json();
+
+    const form = new FormData();
+    form.append('intervention_id', intervencion.id);
+    form.append('folio', data.folio);
+    form.append('file', pdfDoc.output('blob'), `${data.folio}_${data.equipoId}.pdf`);
+    const reporteResp = await fetch('/api/reports', { method: 'POST', body: form });
+    if (!reporteResp.ok) { mostrarHint('El informe se registró, pero el PDF no se pudo subir al servidor.'); return; }
+
+    mostrarHint('Informe guardado en el servidor.');
+  } catch (err) {
+    mostrarHint('No se pudo conectar con el servidor. El PDF se descargó igual.');
+  }
+}
+
 document.getElementById('report-pdf-btn').addEventListener('click', (e) => {
   if (!ultimoInformeData) { e.preventDefault(); return; }
   const doc = generarInformePdf(ultimoInformeData);
   doc.save(`${ultimoInformeData.folio}_${ultimoInformeData.equipoId}.pdf`);
+  // Solo se persiste un informe nuevo — reabrir uno del historial no debe duplicarlo.
+  if (previewOrigen === 'nuevo') guardarInformeEnBackend(ultimoInformeData, doc);
   informeFolioCounter++;
   e.preventDefault();
 });
@@ -2249,62 +2312,118 @@ document.getElementById('btn-informe-whatsapp').addEventListener('click', async 
   enviarSoloTexto();
 });
 
-// ---- Historial: píldora "Ver informe" (ejemplos previos al generador de informes) ----
-const HISTORIAL_INFORMES = [
-  {
-    folio: 'INF-H004', equipo: 'Camión Minero MT65S', equipoId: 'TS-CAEX-0000125',
-    tecnico: 'Carlos Muñoz', fecha: '12/05/2024', horometro: '8.610 h', horaInicio: '08:15', horaTermino: '09:40',
-    descripcion: 'Se realizó cambio de aceite de motor y reemplazo de filtros de aceite y aire según plan de lubricación programado.',
-    fallas: '', severidad: null, repuestosUsados: true, repuestosDetalle: 'Filtro de aceite (RP-0231), Filtro de aire (RP-0198)',
-    operativo: true, observaciones: 'Sin hallazgos adicionales. Próxima mantención programada a las 9.100h.',
-    instructivosUsados: true, instructivosNombres: ['Verificación Motor y Refrigeración'], alcances: 'Conviene soltar el filtro de aceite con el motor tibio, no frío — sale con menos esfuerzo y drena mejor.',
-    fotos: [], firmaDataUrl: null,
-  },
-  {
-    folio: 'INF-H003', equipo: 'Camión Minero MT65S', equipoId: 'TS-CAEX-0000125',
-    tecnico: 'Ana Rojas', fecha: '28/03/2024', horometro: '8.420 h', horaInicio: '10:00', horaTermino: '11:20',
-    descripcion: 'Inspección programada de sistema de frenos y neumáticos. Se midió espesor de pastillas y presión de los 6 neumáticos.',
-    fallas: 'Pastilla de freno delantera izquierda con desgaste cercano al mínimo (8,5mm).', severidad: 'media',
-    repuestosUsados: false, repuestosDetalle: '',
-    operativo: true, observaciones: 'Se recomienda programar cambio de pastillas de freno en la próxima intervención.',
-    instructivosUsados: true, instructivosNombres: ['Verificación Sistema de Frenos', 'Verificación Presión de Neumáticos'], alcances: 'Medir el espesor de pastilla en dos puntos del disco: el desgaste no siempre es parejo y por un lado puede estar bajo el mínimo.',
-    fotos: [], firmaDataUrl: null,
-  },
-  {
-    folio: 'INF-H002', equipo: 'Camión Minero MT65S', equipoId: 'TS-CAEX-0000125',
-    tecnico: 'Carlos Muñoz', fecha: '15/01/2024', horometro: '8.050 h', horaInicio: '14:30', horaTermino: '17:10',
-    descripcion: 'Reparación de fuga detectada en manguera de retorno del sistema hidráulico de volteo. Se reemplazó la manguera completa.',
-    fallas: 'Fuga activa de aceite hidráulico en manguera de retorno, sector filtro.', severidad: 'alta',
-    repuestosUsados: true, repuestosDetalle: 'Manguera hidráulica (RP-0512)',
-    operativo: true, observaciones: 'Se realizó prueba de presión post-reparación sin novedades.',
-    instructivosUsados: true, instructivosNombres: ['Verificación Sistema Hidráulico'], alcances: 'Despresurizar completamente el sistema hidráulico antes de intervenir: bajar tolva, apagar motor y accionar la palanca de volteo un par de veces para liberar presión residual.',
-    fotos: [], firmaDataUrl: null,
-  },
-  {
-    folio: 'INF-H001', equipo: 'Camión Minero MT65S', equipoId: 'TS-CAEX-0000125',
-    tecnico: 'Pedro Silva', fecha: '02/11/2023', horometro: '7.500 h', horaInicio: '08:00', horaTermino: '09:30',
-    descripcion: 'Servicio programado de 250 horas según plan de mantención preventiva. Revisión general del equipo.',
-    fallas: '', severidad: null, repuestosUsados: false, repuestosDetalle: '',
-    operativo: true, observaciones: 'Equipo en buenas condiciones generales.',
-    instructivosUsados: false, instructivosNombres: [], alcances: '',
-    fotos: [], firmaDataUrl: null,
-  },
-];
-
+// ---- Historial real: se consulta /api/assets/:tag_code/interventions al entrar ----
 const BLANK_SIGNATURE = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="220" height="80"><rect width="220" height="80" fill="#ffffff"/><text x="110" y="45" font-family="Helvetica" font-size="11" fill="#999" text-anchor="middle">Firma no disponible</text></svg>');
 
-document.querySelectorAll('.hist-pill').forEach(pill => {
-  pill.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const idx = Number(pill.dataset.hist);
-    const data = { ...HISTORIAL_INFORMES[idx], firmaDataUrl: BLANK_SIGNATURE };
-    ultimoInformeData = data;
-    document.getElementById('report-preview-content').innerHTML = construirInformeHTML(data);
-    document.querySelectorAll('.report-send-row').forEach(r => r.classList.remove('hidden'));
-    previewOrigen = 'historial';
-    goTo('step-informe-preview');
-  });
-});
+function mapearIntervencionAInforme(item){
+  const d = item.details || {};
+  const sm = d.solicitudMantenimiento || null;
+  const formatearFecha = (iso) => iso ? new Date(iso).toLocaleDateString('es-CL') : '';
+  const formatearHora = (iso) => iso ? new Date(iso).toISOString().slice(11, 16) : '';
+  return {
+    folio: item.report_folio || '(sin informe generado)',
+    equipo: (ACTIVOS[activoActualId] && ACTIVOS[activoActualId].nombre) || '',
+    equipoId: activoActualId,
+    tecnico: item.technician_name || '',
+    fecha: formatearFecha(item.started_at),
+    horometro: d.horometro || '',
+    horaInicio: formatearHora(item.started_at),
+    horaTermino: formatearHora(item.finished_at),
+    descripcion: item.work_performed || '',
+    fallas: item.diagnosis || '',
+    severidad: d.severidad || null,
+    repuestosUsados: !!(item.parts_used && item.parts_used.usados),
+    repuestosDetalle: (item.parts_used && item.parts_used.detalle) || '',
+    operativo: item.operational_after,
+    observaciones: d.observaciones || '',
+    instructivosUsados: !!d.instructivosUsados,
+    instructivosNombres: d.instructivosNombres || [],
+    alcances: d.alcances || '',
+    smAplica: !!sm,
+    smFolio: sm ? sm.folio : null,
+    smTipo: sm ? sm.tipo : null,
+    smPrioridad: sm ? sm.prioridad : null,
+    smComponente: sm ? sm.componente : null,
+    smDescripcion: sm ? sm.descripcion : '',
+    fotos: [],
+    firmaDataUrl: BLANK_SIGNATURE,
+  };
+}
+
+function iconoHistorial(operativo){
+  if (operativo === false) return '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3 3 0 0 1-3.9 3.9L4 17v3h3l6.8-6.8a3 3 0 0 1 3.9-3.9l-2 2-1.4-1.4z" stroke="#b3a57e" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+}
+
+function badgeHistorial(operativo){
+  if (operativo === false) return '<span class="li-badge err"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>Detenido</span>';
+  if (operativo === true) return '<span class="li-badge ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Operativo</span>';
+  return '<span class="li-badge warn">Registro</span>';
+}
+
+let historialCache = [];
+
+async function cargarHistorial(){
+  const listEl = document.getElementById('historial-list');
+  const statusEl = document.getElementById('historial-status');
+  if (!listEl) return;
+
+  if (!activoActualId) return;
+
+  if (!navigator.onLine) {
+    listEl.innerHTML = '<p class="historial-status">Sin conexión — el historial no está disponible offline todavía.</p>';
+    return;
+  }
+
+  listEl.innerHTML = '<p class="historial-status" id="historial-status">Cargando historial…</p>';
+
+  try {
+    const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/interventions`);
+    if (!resp.ok) {
+      listEl.innerHTML = '<p class="historial-status">No se pudo cargar el historial.</p>';
+      return;
+    }
+    const items = await resp.json();
+    historialCache = items;
+
+    if (!items.length) {
+      listEl.innerHTML = '<p class="historial-status">Todavía no hay intervenciones registradas para este activo.</p>';
+      return;
+    }
+
+    listEl.innerHTML = items.map((item, idx) => {
+      const fecha = item.started_at ? new Date(item.started_at).toLocaleDateString('es-CL') : '';
+      const titulo = escapeHtml(item.work_performed || item.diagnosis || 'Intervención registrada');
+      const subtitulo = escapeHtml(`${fecha} · ${item.diagnosis || 'Sin diagnóstico registrado'} · Téc. ${item.technician_name || ''}`);
+      const pill = item.report_id
+        ? `<button class="hist-pill" data-hist="${idx}" type="button">Ver informe</button>`
+        : '';
+      return `
+        <div class="list-row">
+          <div class="li-ic">${iconoHistorial(item.operational_after)}</div>
+          <div class="li-txt"><strong>${titulo}</strong><small>${subtitulo}</small></div>
+          ${badgeHistorial(item.operational_after)}
+          ${pill}
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('.hist-pill').forEach((pill) => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = Number(pill.dataset.hist);
+        const data = mapearIntervencionAInforme(historialCache[idx]);
+        ultimoInformeData = data;
+        document.getElementById('report-preview-content').innerHTML = construirInformeHTML(data);
+        document.querySelectorAll('.report-send-row').forEach(r => r.classList.remove('hidden'));
+        previewOrigen = 'historial';
+        goTo('step-informe-preview');
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = '<p class="historial-status">No se pudo conectar con el servidor.</p>';
+  }
+}
 
 
 // ================= RESOLUCIÓN UNIFICADA DE CÓDIGO ESCANEADO/INGRESADO =================
