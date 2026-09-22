@@ -1,1648 +1,836 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <title>TAGSENSE - Plataforma Inteligente para Activos Industriales</title>
-    <meta name="theme-color" content="#0B0E14" />
-    <meta
-      name="description"
-      content="Plataforma Inteligente para Activos Industriales - TagSense"
-    />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Identificación de activos industriales por QR/NFC, fichas técnicas, checklists e informes de mantenimiento — funciona offline.">
+<title>TAGSENSE</title>
 
-    <style>
-      /* ==========================================================================
-       TAGSENSE INDUSTRIAL DESIGN SYSTEM (Dark Industrial & Vivid Orange)
-       ========================================================================== */
-      :root {
-        --bg-dark: #0b0e14;
-        --bg-surface: #131722;
-        --bg-card: #1a1f2c;
-        --bg-card-hover: #22293a;
-        --accent-orange: #ff5500;
-        --accent-orange-glow: rgba(255, 85, 0, 0.35);
-        --accent-orange-light: #ff7733;
-        --text-main: #f1f5f9;
-        --text-muted: #94a3b8;
-        --border-color: #2a3245;
-        --status-online: #10b981;
-        --status-offline: #f59e0b;
-        --font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-      }
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TAGSENSE">
+<link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="assets/icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<div class="offline-banner" id="offline-banner"></div>
 
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        font-family: var(--font-family);
-        -webkit-tap-highlight-color: transparent;
-      }
-      body {
-        background-color: var(--bg-dark);
-        color: var(--text-main);
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        overflow-x: hidden;
-      }
+<button class="theme-toggle" id="theme-toggle" aria-label="Cambiar entre modo claro y oscuro" type="button">
+  <svg class="ic-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+  <svg class="ic-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+</button>
 
-      /* HEADER */
-      .app-header {
-        background: var(--bg-surface);
-        border-bottom: 1px solid var(--border-color);
-        padding: 12px 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      }
-      .brand-logo {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        cursor: pointer;
-      }
-      .brand-logo svg {
-        height: 28px;
-        width: auto;
-      }
-      .brand-title {
-        font-weight: 800;
-        font-size: 1.2rem;
-        letter-spacing: 1px;
-        color: #fff;
-      }
-      .brand-title span {
-        color: var(--accent-orange);
-      }
-      .header-badges {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .client-badge {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--border-color);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        color: var(--text-muted);
-      }
-      .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid var(--status-online);
-        color: var(--status-online);
-        cursor: pointer;
-        transition: all 0.3s ease;
-      }
-      .status-badge.offline {
-        background: rgba(245, 158, 11, 0.1);
-        border-color: var(--status-offline);
-        color: var(--status-offline);
-      }
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-        box-shadow: 0 0 8px currentColor;
-      }
+<button class="field-toggle" id="field-toggle" aria-label="Activar modo terreno (alto contraste)" type="button">
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2 12h3M19 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+</button>
 
-      /* LAYOUT CONTAINER */
-      .main-container {
-        flex: 1;
-        padding: 16px;
-        max-width: 1100px;
-        margin: 0 auto;
-        width: 100%;
-        padding-bottom: 80px;
-      }
+<button class="report-fab" id="report-fab" type="button">
+  <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10l4 4v14H7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h8M9 16h8M9 8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  Generar Informe
+</button>
 
-      /* VIEWS MANAGEMENT */
-      .view-section {
-        display: none;
-        animation: fadeIn 0.25s ease-in-out;
-      }
-      .view-section.active {
-        display: block;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
+<div class="panel">
 
-      /* NAVIGATION BAR (BOTTOM) */
-      .bottom-nav {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: var(--bg-surface);
-        border-top: 1px solid var(--border-color);
-        display: flex;
-        justify-content: space-around;
-        padding: 8px 0;
-        z-index: 100;
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
-      }
-      .nav-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        color: var(--text-muted);
-        text-decoration: none;
-        font-size: 0.7rem;
-        font-weight: 600;
-        background: none;
-        border: none;
-        cursor: pointer;
-        width: 20%;
-        transition: color 0.2s;
-      }
-      .nav-item svg {
-        width: 22px;
-        height: 22px;
-        fill: currentColor;
-      }
-      .nav-item.active {
-        color: var(--accent-orange);
-      }
-      .nav-item.scan-btn {
-        color: #fff;
-        margin-top: -16px;
-      }
-      .scan-btn-inner {
-        background: linear-gradient(
-          135deg,
-          var(--accent-orange-light),
-          var(--accent-orange)
-        );
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 15px var(--accent-orange-glow);
-      }
+  <!-- PASO 1: ACCESO DIRECTO -->
+  <div class="stage step-fade hidden" id="step-access">
+    <div class="brand">
+      <img class="logo" src="assets/img/logo-mark.png" alt="TAGSENSE">
+      <p>Acceso a la plataforma</p>
+    </div>
 
-      /* CARDS & COMPONENTS */
-      .card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      }
-      .card-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #fff;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .card-title svg {
-        fill: var(--accent-orange);
-        width: 20px;
-        height: 20px;
-      }
+    <h2>Bienvenido</h2>
+    <p class="sub">Ingresa con tu correo y contraseña para continuar.</p>
 
-      /* BUTTONS */
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        border: none;
-        cursor: pointer;
-        transition: all 0.2s;
-        width: 100%;
-        text-align: center;
-      }
-      .btn-primary {
-        background: linear-gradient(
-          135deg,
-          var(--accent-orange-light),
-          var(--accent-orange)
-        );
-        color: #fff;
-        box-shadow: 0 4px 12px var(--accent-orange-glow);
-      }
-      .btn-primary:active {
-        transform: scale(0.98);
-      }
-      .btn-secondary {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--border-color);
-        color: var(--text-main);
-      }
-      .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.1);
-      }
-
-      /* ASSET BANNER */
-      .asset-header-card {
-        background: linear-gradient(180deg, #22293a 0%, var(--bg-card) 100%);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 16px;
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 16px;
-      }
-      .asset-header-card::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: var(--accent-orange);
-      }
-      .asset-title-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-      }
-      .asset-name {
-        font-size: 1.3rem;
-        font-weight: 800;
-        color: #fff;
-      }
-      .asset-id {
-        font-size: 0.85rem;
-        color: var(--accent-orange);
-        font-weight: 700;
-        margin-top: 2px;
-      }
-      .asset-badge {
-        background: rgba(16, 185, 129, 0.15);
-        color: var(--status-online);
-        border: 1px solid var(--status-online);
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 700;
-      }
-      .asset-metrics {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        margin-top: 14px;
-      }
-      @media (min-width: 600px) {
-        .asset-metrics {
-          grid-template-columns: repeat(4, 1fr);
-        }
-      }
-      .metric-box {
-        background: rgba(0, 0, 0, 0.25);
-        padding: 10px;
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .metric-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        font-weight: 700;
-      }
-      .metric-value {
-        font-size: 0.95rem;
-        color: #fff;
-        font-weight: 700;
-        margin-top: 2px;
-      }
-
-      /* MODULES GRID (8 BUTTONS) */
-      .modules-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-        margin-bottom: 20px;
-      }
-      @media (min-width: 600px) {
-        .modules-grid {
-          grid-template-columns: repeat(4, 1fr);
-        }
-      }
-      .module-btn {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 16px 12px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        color: var(--text-main);
-        cursor: pointer;
-        transition: all 0.2s;
-        text-align: center;
-      }
-      .module-btn:hover,
-      .module-btn:active {
-        border-color: var(--accent-orange);
-        background: var(--bg-card-hover);
-        transform: translateY(-2px);
-      }
-      .module-icon {
-        width: 42px;
-        height: 42px;
-        border-radius: 8px;
-        background: rgba(255, 85, 0, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--accent-orange);
-      }
-      .module-icon svg {
-        width: 24px;
-        height: 24px;
-        fill: currentColor;
-      }
-      .module-title {
-        font-size: 0.8rem;
-        font-weight: 700;
-        line-height: 1.2;
-      }
-
-      /* SCANNER MODAL & UI */
-      .scanner-box {
-        text-align: center;
-        padding: 30px 20px;
-        border: 2px dashed var(--accent-orange);
-        border-radius: 16px;
-        background: rgba(255, 85, 0, 0.03);
-        margin-bottom: 20px;
-        position: relative;
-      }
-      .tag-graphic {
-        width: 120px;
-        height: 120px;
-        margin: 0 auto 16px;
-        background: #2a3042;
-        border: 2px solid #55607a;
-        border-radius: 12px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-      }
-      .tag-graphic::before {
-        content: "";
-        position: absolute;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: 2px solid var(--accent-orange);
-        animation: pulse 1.8s infinite;
-      }
-      @keyframes pulse {
-        0% {
-          transform: scale(0.8);
-          opacity: 1;
-        }
-        100% {
-          transform: scale(1.4);
-          opacity: 0;
-        }
-      }
-
-      /* CHATBOT / VIRTUAL ASSISTANT */
-      .chat-container {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        max-height: 450px;
-        overflow-y: auto;
-        padding-right: 4px;
-      }
-      .chat-msg {
-        display: flex;
-        gap: 10px;
-        max-width: 88%;
-      }
-      .chat-msg.user {
-        align-self: flex-end;
-        flex-direction: row-reverse;
-      }
-      .chat-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: var(--accent-orange);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 0.8rem;
-        color: #fff;
-        flex-shrink: 0;
-      }
-      .chat-bubble {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        padding: 12px 14px;
-        border-radius: 12px;
-        font-size: 0.88rem;
-        line-height: 1.4;
-      }
-      .chat-msg.user .chat-bubble {
-        background: var(--accent-orange);
-        border-color: var(--accent-orange);
-        color: #fff;
-      }
-      .options-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-        margin-top: 10px;
-      }
-      .option-chip {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--border-color);
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-main);
-        cursor: pointer;
-        text-align: center;
-        transition: all 0.2s;
-      }
-      .option-chip:hover {
-        border-color: var(--accent-orange);
-        background: rgba(255, 85, 0, 0.15);
-      }
-
-      /* CHECKLIST LIST */
-      .check-list {
-        list-style: none;
-        margin: 10px 0;
-      }
-      .check-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        font-size: 0.85rem;
-      }
-      .check-item input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        accent-color: var(--accent-orange);
-      }
-
-      /* SIGNATURE CANVAS */
-      .signature-pad {
-        background: #fff;
-        border-radius: 8px;
-        width: 100%;
-        height: 120px;
-        touch-action: none;
-        cursor: crosshair;
-      }
-
-      /* PRINT / REPORT SPECIFIC STYLES */
-      @media print {
-        body {
-          background: #fff !important;
-          color: #000 !important;
-        }
-        .app-header,
-        .bottom-nav,
-        .no-print {
-          display: none !important;
-        }
-        .main-container {
-          padding: 0 !important;
-          margin: 0 !important;
-          max-width: 100% !important;
-        }
-        .print-report {
-          display: block !important;
-          border: none !important;
-          box-shadow: none !important;
-          background: #fff !important;
-          color: #000 !important;
-        }
-        .print-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 15px 0;
-        }
-        .print-table th,
-        .print-table td {
-          border: 1px solid #cbd5e1;
-          padding: 8px;
-          text-align: left;
-          font-size: 12px;
-          color: #000;
-        }
-        .print-table th {
-          background: #f1f5f9;
-          font-weight: bold;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <!-- TOP APP HEADER -->
-    <header class="app-header">
-      <div class="brand-logo" onclick="switchView('inicio')">
-        <!-- TagSense Symbol Logo -->
-        <svg viewBox="0 0 100 100">
-          <path
-            fill="#FF5500"
-            d="M15,20 L45,20 L45,75 C45,82 38,88 30,88 L25,88 L25,72 L28,72 C31,72 33,70 33,67 L33,35 L15,35 Z"
-          />
-          <path
-            fill="#FF5500"
-            d="M85,20 L55,20 L55,75 C55,82 62,88 70,88 L75,88 L75,72 L72,72 C69,72 67,70 67,67 L67,35 L85,35 Z"
-          />
-          <path fill="#FF5500" d="M22,42 L40,42 L32,60 Z" />
-          <path fill="#FF5500" d="M78,42 L60,42 L68,60 Z" />
-        </svg>
-        <div class="brand-title">TAG<span>SENSE</span></div>
+    <div class="field">
+      <label>Correo electrónico</label>
+      <div class="input-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18v12H3z" stroke="#a8a6a2" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7l9 6 9-6" stroke="#a8a6a2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <input id="email-input" type="email" placeholder="tu correo TAGSENSE" autocomplete="email" inputmode="email">
       </div>
-      <div class="header-badges">
-        <div class="client-badge">PUCOBRE</div>
-        <div
-          class="status-badge"
-          id="network-status"
-          onclick="toggleOnlineStatus()"
-        >
-          <div class="status-dot"></div>
-          <span id="network-text">ONLINE</span>
+    </div>
+
+    <div class="field">
+      <label>Contraseña</label>
+      <div class="input-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="1.6" stroke="#a8a6a2" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#a8a6a2" stroke-width="1.6"/></svg>
+        <input id="password-input" type="text" placeholder="••••••••" autocomplete="current-password">
+        <button type="button" class="pw-toggle showing" id="pw-toggle" aria-label="Ocultar contraseña">
+          <svg class="eye-open" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="#a8a6a2" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="#a8a6a2" stroke-width="1.6"/></svg>
+          <svg class="eye-closed" viewBox="0 0 24 24" fill="none"><path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M6.5 6.7C4 8.3 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.7-1.2M9.9 5.2C10.6 5.1 11.3 5 12 5c6.5 0 10 7 10 7-.6 1.1-1.4 2.3-2.5 3.4" stroke="#a8a6a2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <p class="login-error hidden" id="login-error">Correo o contraseña incorrectos. Intenta nuevamente.</p>
+
+    <button class="btn" id="access-btn">
+      Ingresar
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="spacer"></div>
+
+    <div class="footer">
+      <div class="divider">
+        <div class="line"></div>
+        <div class="lockwrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="1.6" stroke="#a8a6a2" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#a8a6a2" stroke-width="1.6"/></svg>
+        </div>
+        <div class="line"></div>
+      </div>
+      <p>Acceso protegido — ingresa tu correo y contraseña de TAGSENSE.</p>
+      <button class="link-btn hidden" id="btn-install-app" type="button">Instalar TAGSENSE en este dispositivo</button>
+      <p class="install-ios-hint hidden" id="install-ios-hint">Para instalar: toca <strong>Compartir</strong> → <strong>“Agregar a pantalla de inicio”</strong>.</p>
+    </div>
+  </div>
+
+  <!-- PASO 2: BIENVENIDA -->
+  <div class="stage step-fade hidden welcome centered" id="step-welcome">
+    <div class="icn">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#177b57" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h2>Sesión iniciada</h2>
+    <p>Bienvenido a TagSense, <span class="name" id="welcome-name">usuario</span>.</p>
+  </div>
+
+  <!-- PASO 3: MODO LECTURA -->
+  <div class="stage step-fade centered" id="step-read">
+    <p class="eyebrow">Modo lectura</p>
+    <h2 id="nfc-main-text">Leyendo activo</h2>
+
+    <div class="nfc-circle" id="nfc-circle">
+      <div class="nfc-led" id="nfc-led"></div>
+      <div class="nfc-radar"></div>
+      <div class="nfc-radar"></div>
+      <div class="nfc-radar"></div>
+      <svg class="ring" viewBox="0 0 200 200">
+        <circle class="ring-bg" cx="100" cy="100" r="92"/>
+        <circle class="ring-progress" id="ring-progress" cx="100" cy="100" r="92"/>
+      </svg>
+      <div class="nfc-core pulsing">
+        <div class="nfc-core-mark">
+          <img src="assets/img/logo-wide.png" alt="TAGSENSE" aria-hidden="true">
         </div>
       </div>
-    </header>
+      <svg class="nfc-waves" width="26" height="34" viewBox="0 0 26 34" fill="none">
+        <path d="M2 4C8 9 8 25 2 30" stroke="#a8a6a2" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 1C18 8 18 26 10 33" stroke="#a8a6a2" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        <path d="M18 -2C27 7 27 27 18 36" stroke="#a8a6a2" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+      </svg>
+      <div class="nfc-check" id="nfc-check">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#b3a57e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
 
-    <!-- MAIN APP CONTENT AREA -->
-    <main class="main-container">
-      <!-- VIEW 1: INICIO / DASHBOARD -->
-      <section id="view-inicio" class="view-section active">
-        <div
-          class="card"
-          style="
-            background: linear-gradient(
-              135deg,
-              rgba(255, 85, 0, 0.15),
-              rgba(19, 23, 34, 0.9)
-            );
-            border-color: var(--accent-orange);
-          "
-        >
-          <h2 style="font-size: 1.2rem; margin-bottom: 6px; color: #fff">
-            Plataforma Inteligente de Activos
-          </h2>
-          <p
-            style="
-              font-size: 0.85rem;
-              color: var(--text-muted);
-              margin-bottom: 14px;
-            "
-          >
-            Información técnica centralizada, diagnósticos asistidos y
-            trazabilidad total.
-          </p>
-          <button class="btn btn-primary" onclick="switchView('scan')">
-            <svg
-              style="width: 20px; height: 20px; fill: currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-4h2v2h-2v-2z"
-              />
-            </svg>
-            SENSAR TAG CÓDIGO ACTIVO
-          </button>
-        </div>
+    <p class="read-status" id="read-status-hint"></p>
 
-        <div class="card-title">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"
-            />
-          </svg>
-          ACTIVOS DESTACADOS (MINA PUCOBRE)
-        </div>
-
-        <!-- ASSET ITEM 1 -->
-        <div
-          class="card"
-          style="cursor: pointer"
-          onclick="selectAsset('MT65S')"
-        >
-          <div
-            style="
-              display: flex;
-              justify-shadow: space-between;
-              justify-content: space-between;
-              align-items: center;
-            "
-          >
-            <div>
-              <div style="font-size: 1.05rem; font-weight: 800; color: #fff">
-                Camión Minero MT65S
-              </div>
-              <div
-                style="
-                  font-size: 0.8rem;
-                  color: var(--accent-orange);
-                  font-weight: 700;
-                "
-              >
-                ID: TS-CAEX-000125
-              </div>
-            </div>
-            <span class="asset-badge">OPERATIVO</span>
-          </div>
-          <div
-            style="
-              margin-top: 10px;
-              font-size: 0.8rem;
-              color: var(--text-muted);
-              display: flex;
-              gap: 15px;
-            "
-          >
-            <span>📍 Mina Norte/Pala 01</span>
-            <span>⏱️ 12.458 Hrs</span>
-          </div>
-        </div>
-
-        <!-- ASSET ITEM 2 -->
-        <div
-          class="card"
-          style="cursor: pointer"
-          onclick="selectAsset('SCOOP')"
-        >
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            "
-          >
-            <div>
-              <div style="font-size: 1.05rem; font-weight: 800; color: #fff">
-                Scooptram LHD (ST14)
-              </div>
-              <div
-                style="
-                  font-size: 0.8rem;
-                  color: var(--accent-orange);
-                  font-weight: 700;
-                "
-              >
-                ID: TS-LHD-000084
-              </div>
-            </div>
-            <span
-              class="asset-badge"
-              style="
-                background: rgba(245, 158, 11, 0.15);
-                border-color: var(--status-offline);
-                color: var(--status-offline);
-              "
-              >EN MANTENCIÓN</span
-            >
-          </div>
-          <div
-            style="
-              margin-top: 10px;
-              font-size: 0.8rem;
-              color: var(--text-muted);
-              display: flex;
-              gap: 15px;
-            "
-          >
-            <span>📍 Nivel 380 - Taller</span>
-            <span>⏱️ 8.920 Hrs</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 2: SCANNER (NFC / QR SIMULATOR) -->
-      <section id="view-scan" class="view-section">
-        <div class="card">
-          <div class="card-title">MODO LECTURA TAGSENSE</div>
-          <p
-            style="
-              font-size: 0.85rem;
-              color: var(--text-muted);
-              margin-bottom: 16px;
-              text-align: center;
-            "
-          >
-            Acerca el dispositivo al Sensor TagSense (NFC) o escanea el código
-            QR impreso en la placa de acero inoxidable.
-          </p>
-
-          <div class="scanner-box">
-            <div class="tag-graphic">
-              <svg
-                style="width: 40px; height: 40px; fill: var(--accent-orange)"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM8 10h8v2H8zm0 4h5v2H8z"
-                />
-              </svg>
-              <span
-                style="
-                  font-size: 0.65rem;
-                  color: var(--text-muted);
-                  margin-top: 8px;
-                  font-weight: 700;
-                "
-                >NFC • LoRa • GPS</span
-              >
-            </div>
-
-            <div
-              id="scan-status-text"
-              style="
-                font-size: 0.95rem;
-                font-weight: 700;
-                color: #fff;
-                margin-bottom: 14px;
-              "
-            >
-              SENSANDO CÓDIGO TAGSENSE...
-            </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted)">
-              Acerca tu smartphone al tag o pulsa el botón inferior.
-            </div>
-          </div>
-
-          <button
-            class="btn btn-primary"
-            onclick="simulateTagScan('TS-CAEX-000125')"
-          >
-            ⚡ SIMULAR LECTURA: TAG TS-CAEX-000125
-          </button>
-          <button
-            class="btn btn-secondary"
-            style="margin-top: 10px"
-            onclick="startRealNFCScan()"
-          >
-            📡 ACTIVAR LECTOR NFC REAL (ANDROID)
-          </button>
-        </div>
-      </section>
-
-      <!-- VIEW 3: ACTIVO DETALLE (MT65S) -->
-      <section id="view-activo" class="view-section">
-        <div class="asset-header-card">
-          <div class="asset-title-row">
-            <div>
-              <div class="asset-name" id="asset-det-title">
-                Camión Minero MT65S
-              </div>
-              <div class="asset-id" id="asset-det-id">ID: TS-CAEX-000125</div>
-            </div>
-            <span class="asset-badge">OPERATIVO</span>
-          </div>
-
-          <div class="asset-metrics">
-            <div class="metric-box">
-              <div class="metric-label">UBICACIÓN</div>
-              <div class="metric-value">Mina Norte/Pala 01</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">HORÓMETRO</div>
-              <div class="metric-value">12.458 Hrs</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">N° DE SERIE</div>
-              <div class="metric-value">MT65S-00125</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-label">ÚLT. INTERVENCIÓN</div>
-              <div class="metric-value">15/05/2026</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 8 FUNCIONALIDADES DE TAGSENSE EN GRID -->
-        <div class="modules-grid">
-          <div class="module-btn" onclick="openModule('info')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Información General</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('docs')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Documentos (Manuales)</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('historial')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Historial Actividades</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('fotos')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Fotografías</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('repuestos')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Repuestos</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('inspecciones')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Inspecciones / Checklists</div>
-          </div>
-
-          <div class="module-btn" onclick="openModule('mantenedores')">
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                />
-              </svg>
-            </div>
-            <div class="module-title">Mantenedores</div>
-          </div>
-
-          <div
-            class="module-btn"
-            style="
-              border-color: var(--accent-orange);
-              background: rgba(255, 85, 0, 0.08);
-            "
-            onclick="switchView('asistente')"
-          >
-            <div class="module-icon">
-              <svg viewBox="0 0 24 24">
-                <path
-                  d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"
-                />
-              </svg>
-            </div>
-            <div class="module-title" style="color: var(--accent-orange)">
-              Asistente IA
-            </div>
-          </div>
-        </div>
-
-        <!-- MODAL / DISPLAY CONTAINER FOR MODULE CONTENT -->
-        <div id="module-content-display" class="card" style="display: none">
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 12px;
-            "
-          >
-            <h3 id="module-display-title" class="card-title" style="margin: 0">
-              Título del Módulo
-            </h3>
-            <button
-              style="
-                background: none;
-                border: none;
-                color: var(--text-muted);
-                font-size: 1.2rem;
-                cursor: pointer;
-              "
-              onclick="
-                document.getElementById(
-                  'module-content-display',
-                ).style.display = 'none'
-              "
-            >
-              ✕
-            </button>
-          </div>
-          <div
-            id="module-display-body"
-            style="font-size: 0.88rem; color: var(--text-muted)"
-          >
-            Contenido cargado dinámicamente...
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 4: ASISTENTE TÉCNICO VIRTUAL (AI DIAGNOSTIC FLOW) -->
-      <section id="view-asistente" class="view-section">
-        <div class="card" style="border-color: var(--accent-orange)">
-          <div class="card-title" style="justify-content: space-between">
-            <span>🤖 ASISTENTE TÉCNICO VIRTUAL</span>
-            <span
-              style="
-                font-size: 0.7rem;
-                background: var(--accent-orange);
-                color: #fff;
-                padding: 2px 6px;
-                border-radius: 4px;
-              "
-              >PUCOBRE OEM</span
-            >
-          </div>
-          <p
-            style="
-              font-size: 0.8rem;
-              color: var(--text-muted);
-              margin-bottom: 12px;
-            "
-          >
-            Guía paso a paso para diagnóstico y validación técnica en terreno.
-          </p>
-
-          <div class="chat-container" id="chat-box">
-            <!-- CHAT MESSAGE 1 -->
-            <div class="chat-msg">
-              <div class="chat-avatar">IA</div>
-              <div class="chat-bubble">
-                Hola <strong>Juan Pérez</strong>. He identificado el activo
-                <strong>Camión Minero MT65S (TS-CAEX-000125)</strong
-                >.<br /><br />
-                ¿En qué sistema identificas la falla o anomalía?
-                <div class="options-grid" id="step-1-options">
-                  <div
-                    class="option-chip"
-                    onclick="handleAssistantStep(1, 'Levante Tolva')"
-                  >
-                    Levante Tolva
-                  </div>
-                  <div
-                    class="option-chip"
-                    onclick="handleAssistantStep(1, 'Dirección')"
-                  >
-                    Dirección
-                  </div>
-                  <div
-                    class="option-chip"
-                    onclick="handleAssistantStep(1, 'Frenos')"
-                  >
-                    Frenos
-                  </div>
-                  <div
-                    class="option-chip"
-                    onclick="handleAssistantStep(1, 'Otro')"
-                  >
-                    Otro
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 5: INFORME TÉCNICO AUTOMÁTICO & PDF PREVIEW -->
-      <section id="view-reporte" class="view-section">
-        <div class="card no-print">
-          <div class="card-title">INFORME TÉCNICO GENERADO AUTOMÁTICAMENTE</div>
-          <p
-            style="
-              font-size: 0.85rem;
-              color: var(--text-muted);
-              margin-bottom: 14px;
-            "
-          >
-            El informe contiene el diagnóstico validado por el mantenedor,
-            repuestos y evidencias.
-          </p>
-          <div style="display: flex; gap: 10px">
-            <button class="btn btn-primary" onclick="window.print()">
-              🖨️ IMPRIMIR / GUARDAR PDF
-            </button>
-          </div>
-        </div>
-
-        <!-- PRINTABLE REPORT SHEET -->
-        <div
-          class="card print-report"
-          style="
-            background: #fff;
-            color: #1e293b;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-          "
-        >
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 2px solid #e2e8f0;
-              padding-bottom: 12px;
-              margin-bottom: 16px;
-            "
-          >
-            <div>
-              <h1 style="font-size: 1.4rem; color: #0f172a; font-weight: 800">
-                INFORME TÉCNICO DE INTERVENCIÓN
-              </h1>
-              <div style="font-size: 0.8rem; color: #64748b; font-weight: 700">
-                PLATAFORMA TAGSENSE - PUCOBRE
-              </div>
-            </div>
-            <div style="text-align: right">
-              <div style="font-size: 0.85rem; font-weight: 800; color: #ff5500">
-                PUCOBRE
-              </div>
-              <div
-                style="font-size: 0.75rem; color: #64748b"
-                id="report-date-str"
-              >
-                26-08-2026 17:30
-              </div>
-            </div>
-          </div>
-
-          <table class="print-table">
-            <tr>
-              <th>ACTIVO</th>
-              <td>MT65S - Camión Minero</td>
-              <th>CÓDIGO ACTIVO</th>
-              <td>TS-CAEX-000125</td>
-            </tr>
-            <tr>
-              <th>HORAS ACTIVO</th>
-              <td>12.458 h</td>
-              <th>UBICACIÓN</th>
-              <td>Mina - Pucobre (Norte)</td>
-            </tr>
-          </table>
-
-          <div style="margin-top: 16px">
-            <h3
-              style="
-                font-size: 0.95rem;
-                color: #0f172a;
-                border-bottom: 1px solid #cbd5e1;
-                padding-bottom: 4px;
-                margin-bottom: 8px;
-              "
-            >
-              RESUMEN DE LA INTERVENCIÓN
-            </h3>
-            <table class="print-table">
-              <tr>
-                <th style="width: 25%">Diagnóstico</th>
-                <td id="report-diag-text">
-                  Fuga en flexible hidráulico (Sistema Levante Tolva)
-                </td>
-              </tr>
-              <tr>
-                <th>Trabajo realizado</th>
-                <td>
-                  Se inspecciona línea hidráulica de levante, detectando fuga
-                  por abrasión. Se realiza cambio de flexible hidráulico 1" x
-                  1200 mm y ajuste con torque especificado por OEM.
-                </td>
-              </tr>
-              <tr>
-                <th>Repuestos utilizados</th>
-                <td>
-                  • Flexible hidráulico 1" x 1200 mm<br />• Abrazadera de
-                  sujeción de alta presión
-                </td>
-              </tr>
-            </table>
-          </div>
-
-          <div style="margin-top: 16px">
-            <h3
-              style="
-                font-size: 0.95rem;
-                color: #0f172a;
-                border-bottom: 1px solid #cbd5e1;
-                padding-bottom: 4px;
-                margin-bottom: 8px;
-              "
-            >
-              EVIDENCIAS FOTOGRÁFICAS
-            </h3>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-                margin-top: 8px;
-              "
-            >
-              <div
-                style="
-                  background: #f1f5f9;
-                  border: 1px solid #cbd5e1;
-                  height: 90px;
-                  border-radius: 4px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: #64748b;
-                  font-size: 0.75rem;
-                "
-              >
-                📷 Inspección Fuga Flexible
-              </div>
-              <div
-                style="
-                  background: #f1f5f9;
-                  border: 1px solid #cbd5e1;
-                  height: 90px;
-                  border-radius: 4px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: #64748b;
-                  font-size: 0.75rem;
-                "
-              >
-                📷 Componente Reemplazado
-              </div>
-            </div>
-          </div>
-
-          <div
-            style="
-              margin-top: 24px;
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-            "
-          >
-            <div>
-              <div
-                style="font-size: 0.85rem; font-weight: bold; color: #0f172a"
-              >
-                TÉCNICO RESPONSABLE:
-              </div>
-              <div style="font-size: 0.85rem; color: #334155">
-                Juan Pérez (Mantenedor Especialista)
-              </div>
-            </div>
-            <div style="text-align: center">
-              <canvas
-                id="signature-pad"
-                class="signature-pad"
-                style="border: 1px dashed #cbd5e1; width: 180px; height: 60px"
-              ></canvas>
-              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px">
-                FIRMA DIGITAL REGISTRADA
-              </div>
-            </div>
-          </div>
-
-          <div
-            style="
-              margin-top: 20px;
-              text-align: center;
-              font-size: 0.7rem;
-              color: #94a3b8;
-              border-top: 1px solid #e2e8f0;
-              padding-top: 8px;
-            "
-          >
-            Informe generado automáticamente por TagSense Platform • Traza de
-            seguridad ID: TS-RPT-202688412
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- BOTTOM NAVIGATION BAR -->
-    <nav class="bottom-nav">
-      <button
-        class="nav-item active"
-        id="nav-inicio"
-        onclick="switchView('inicio')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-        </svg>
-        Inicio
+    <div class="read-alt-actions">
+      <button class="btn-outline" id="btn-scan-qr" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.8"/><path d="M14 14h3v3h-3zM19 14v3M14 19h3M19 19v2M17 21h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Escanear código QR
       </button>
-      <button class="nav-item" id="nav-activo" onclick="switchView('activo')">
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"
-          />
-        </svg>
-        Activo
-      </button>
-      <button
-        class="nav-item scan-btn"
-        id="nav-scan"
-        onclick="switchView('scan')"
-      >
-        <div class="scan-btn-inner">
-          <svg
-            viewBox="0 0 24 24"
-            style="width: 26px; height: 26px; fill: #fff"
-          >
-            <path
-              d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-4h2v2h-2v-2z"
-            />
-          </svg>
+      <button class="link-btn" id="btn-manual-code" type="button">Ingresar código manualmente</button>
+    </div>
+
+    <div class="manual-code-box hidden" id="manual-code-box">
+      <div class="input-wrap">
+        <input id="manual-code-input" type="text" placeholder="Ej: TS-CAEX-0000125" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn" id="manual-code-submit" type="button">Buscar activo</button>
+      <p class="manual-code-error hidden" id="manual-code-error">Código no encontrado. Verifica e intenta nuevamente.</p>
+    </div>
+
+  </div>
+
+  <!-- PASO 5: INFORMACIÓN RESUMIDA -->
+  <div class="stage step-fade hidden centered" id="step-confirm-2">
+    <div class="asset-card" style="text-align:left;">
+      <div style="margin-bottom:14px;">
+        <div class="asset-name" style="margin:0;" id="c2-nombre">Camión Minero MT65S</div>
+      </div>
+      <div class="asset-illustration mid-bleed">
+        <img class="truck-photo" alt="Equipo" loading="lazy">
+      </div>
+      <div class="meta-table">
+        <div class="trow"><span class="tk">ID del componente</span><span class="tv copper" id="c2-id">TS-CAEX-0000125</span></div>
+        <div class="trow"><span class="tk">Serie / VIN</span><span class="tv" id="c2-serie">CAT0MT65SFKY100123</span></div>
+        <div class="trow"><span class="tk">Año fabricación</span><span class="tv" id="c2-anio">2021</span></div>
+        <div class="trow"><span class="tk">Horómetro última intervención</span><span class="tv" id="c2-horometro">8.745 h</span></div>
+      </div>
+    </div>
+
+    <button class="btn" id="open-ficha-2">
+      Abrir ficha técnica
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- PASO 6: FICHA TÉCNICA -->
+  <div class="stage step-fade hidden centered" id="step-confirm-3">
+    <div class="ficha-topbar">
+      <img class="ficha-topbar-logo" src="assets/img/logo-wide.png" alt="TAGSENSE">
+    </div>
+
+    <div class="ficha-header">
+      <div class="ficha-thumb">
+        <img class="truck-photo" alt="Equipo" loading="lazy">
+      </div>
+      <div class="txt">
+        <strong id="c3-nombre">Camión Minero MT65S</strong>
+        <div class="id" id="c3-id">ID: TS-CAEX-0000125</div>
+      </div>
+    </div>
+
+    <div class="qa-grid" style="margin-top:16px;">
+      <div class="qa-tile clickable" id="tile-info-general" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><circle cx="14" cy="7.5" r="1.4" fill="#b3a57e"/></svg></div>
+        <div class="qa-txt">
+          <strong>Información General</strong>
+          <small>Datos del activo</small>
         </div>
-        Scan
+      </div>
+      <div class="qa-tile clickable" id="tile-historial" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#b3a57e" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="qa-txt">
+          <strong>Historial</strong>
+          <small>Eventos y mantenciones</small>
+        </div>
+      </div>
+      <div class="qa-tile clickable" id="tile-documentos" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12h6M9 16h6" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="qa-txt">
+          <strong>Manuales</strong>
+          <small>Manuales y PDF</small>
+        </div>
+      </div>
+      <div class="qa-tile clickable" id="tile-repuestos" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="7" cy="18" r="2" stroke="#b3a57e" stroke-width="1.6"/><circle cx="17" cy="18" r="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M3 5h2l2 11h11l2-8H7" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="qa-txt">
+          <strong>Componentes del Activo</strong>
+          <small>Necesarios</small>
+        </div>
+      </div>
+      <div class="qa-tile clickable" id="tile-instructivos" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M8.5 9.5l1.5 1.5 3-3" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 15h7" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="qa-txt">
+          <strong>Instructivos</strong>
+          <small>Verificación en terreno</small>
+        </div>
+      </div>
+      <div class="qa-tile clickable" id="tile-solicitudes" role="button" tabindex="0">
+        <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11l2 2 4-4" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="qa-txt">
+          <strong>Solicitudes de Mantenimiento</strong>
+          <small id="sm-tile-count">Sin solicitudes</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <div class="action-btn primary btn-asistente" role="button" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v12H8l-4 4V4Z" stroke="#1a0f05" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke="#1a0f05" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <div class="btn-txt">
+          <span>Asistente Técnico</span>
+          <span class="btn-subtitle"><span class="dot"></span>Diagnóstico rápido por falla</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="back-link" id="back-to-read">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Volver a Modo Lectura
+    </button>
+  </div>
+
+  <!-- PASO 6B: ASISTENTE TÉCNICO (CHAT CON IA) -->
+  <div class="stage step-fade hidden chat-stage" id="step-asistente">
+    <div class="detail-topbar" style="padding:0 0 12px;">
+      <div class="detail-back" id="back-asistente" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Asistente Técnico</div>
+    </div>
+
+    <div class="chat-header">
+      <div class="chat-avatar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 8 8H4l2 4-2 4h4l4 6 4-6h4l-2-4 2-4h-4l-4-6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="chat-header-info">
+        <strong>Asistente TAGSENSE</strong>
+        <span><span class="dot"></span>Camión Minero MT65S · TS-CAEX-0000125</span>
+      </div>
+      <button class="chat-new-btn" id="chat-new-btn" type="button" aria-label="Iniciar chat nuevo">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>Nuevo</span>
       </button>
-      <button
-        class="nav-item"
-        id="nav-asistente"
-        onclick="switchView('asistente')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"
-          />
-        </svg>
-        Asistente
+    </div>
+
+    <div class="chat-messages" id="chat-messages"></div>
+
+    <div class="symptom-grid" id="symptom-grid">
+      <p class="symptom-grid-label">Tengo una falla en...</p>
+      <div class="symptom-grid-items">
+        <div class="symptom-tile" data-symptom="frenos">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#c91233" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#c91233"/></svg>
+          <span>Frenos</span>
+        </div>
+        <div class="symptom-tile" data-symptom="direccion">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#c91233" stroke-width="1.7"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#c91233" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Dirección</span>
+        </div>
+        <div class="symptom-tile" data-symptom="tolva">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 17h13l4-8H7L3 17Z" stroke="#c91233" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7" cy="19" r="1.6" stroke="#c91233" stroke-width="1.5"/><circle cx="16" cy="19" r="1.6" stroke="#c91233" stroke-width="1.5"/></svg>
+          <span>Tolva</span>
+        </div>
+        <div class="symptom-tile" data-symptom="electrico">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Eléctrico</span>
+        </div>
+        <div class="symptom-tile" data-symptom="hidraulico">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#c91233" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <span>Hidráulico</span>
+        </div>
+        <div class="symptom-tile" data-symptom="ejes">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#c91233" stroke-width="1.7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="#c91233" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Ejes</span>
+        </div>
+        <div class="symptom-tile" data-symptom="sensores">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="10" rx="2" stroke="#c91233" stroke-width="1.7"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="#c91233" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Sensores</span>
+        </div>
+        <div class="symptom-tile" data-symptom="temperatura">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M10 14.76V4a2 2 0 1 1 4 0v10.76a4 4 0 1 1-4 0Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Temperatura</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-suggestions" id="chat-suggestions"></div>
+
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="chat-input" placeholder="Escribe tu consulta técnica..." aria-label="Escribir consulta al asistente técnico" maxlength="300">
+      <button class="chat-send-btn" id="chat-send-btn" type="button" aria-label="Enviar consulta" disabled>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="nav-item" id="nav-reporte" onclick="switchView('reporte')">
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"
-          />
-        </svg>
-        Reportes
+    </div>
+  </div>
+
+  <!-- PASO 7: INFORMACIÓN GENERAL -->
+  <div class="stage step-fade hidden centered" id="step-info-general">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-to-ficha" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Información General</div>
+    </div>
+    <div class="swipe-dots"><span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+
+    <div class="id-card">
+      <div>
+        <div class="lbl">ID TagSense</div>
+        <div class="val">TS-CAEX-0000125</div>
+      </div>
+      <div class="copy-ic" role="button" tabindex="0" aria-label="Copiar ID del equipo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <img class="truck-photo" alt="Camión Minero MT65S" loading="lazy">
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        Datos del activo
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg></span>
+        <span class="dk">Tipo de activo</span>
+        <span class="dv">Equipo Móvil</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+        <span class="dk">Categoría</span>
+        <span class="dv">Camión Minero</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="dk">Fabricante</span>
+        <span class="dv">Epiroc</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.6"/></svg></span>
+        <span class="dk">Modelo</span>
+        <span class="dv">MT65S</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="dk">N.° de serie / VIN</span>
+        <span class="dv">CAT0MT65SFKY100123</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M4 9h16M8 3v3M16 3v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="dk">Año de fabricación</span>
+        <span class="dv">2021</span>
+      </div>
+      <div class="detail-row">
+        <span class="dic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V4l8 3 8-3v13l-8 3-8-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+        <span class="dk">País de fabricación</span>
+        <span class="dv">Suecia</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#b3a57e" stroke-width="1.6"/><path d="M12 3v2.2M12 18.8V21M4.2 12H2M22 12h-2.2M5.6 5.6l1.5 1.5M16.9 16.9l1.5 1.5M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        Especificaciones técnicas
+      </div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Peso operacional</span><span class="dv">62.000 kg</span></div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Capacidad de carga</span><span class="dv">65 toneladas</span></div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Tipo de motor</span><span class="dv">Diésel</span></div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Potencia</span><span class="dv">Epiroc 390 kW (523 HP)</span></div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Lectura operacional</span><span class="dv">Horómetro</span></div>
+      <div class="detail-row"><span class="dot"></span><span class="dk">Unidad</span><span class="dv">Horas (h)</span></div>
+    </div>
+  </div>
+
+  <!-- PASO 8: HISTORIAL -->
+  <div class="stage step-fade hidden centered" id="step-historial">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-historial" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Historial</div>
+    </div>
+    <div class="swipe-dots"><span class="dot"></span><span class="dot active"></span><span class="dot"></span><span class="dot"></span></div>
+    <div class="ptr-indicator" id="ptr-indicator">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 3v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="ptr-text">Suelta para sincronizar</span>
+    </div>
+
+    <div class="id-card">
+      <div>
+        <div class="lbl">ID TagSense</div>
+        <div class="val">TS-CAEX-0000125</div>
+      </div>
+      <div class="copy-ic" role="button" tabindex="0" aria-label="Copiar ID del equipo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <img class="truck-photo" alt="Camión Minero MT65S" loading="lazy">
+    </div>
+
+    <div class="list-card">
+      <div class="list-row">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3 3 0 0 1-3.9 3.9L4 17v3h3l6.8-6.8a3 3 0 0 1 3.9-3.9l-2 2-1.4-1.4z" stroke="#b3a57e" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+        <div class="li-txt">
+          <strong>Mantención preventiva</strong>
+          <small>12/05/2024 · Cambio de aceite y filtros · Téc. Carlos Muñoz</small>
+        </div>
+        <span class="li-badge ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Preventiva</span>
+        <button class="hist-pill" data-hist="0" type="button">Ver informe</button>
+      </div>
+      <div class="list-row">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M8 10l2.5 2.5L16 7" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="li-txt">
+          <strong>Inspección</strong>
+          <small>28/03/2024 · Revisión de frenos y neumáticos · Téc. Ana Rojas</small>
+        </div>
+        <span class="li-badge warn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Inspección</span>
+        <button class="hist-pill" data-hist="1" type="button">Ver informe</button>
+      </div>
+      <div class="list-row">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z" stroke="#b3a57e" stroke-width="1.6"/><path d="M9.5 12l1.8 1.8L15 9.5" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="li-txt">
+          <strong>Reparación</strong>
+          <small>15/01/2024 · Cambio de manguera hidráulica · Téc. Carlos Muñoz</small>
+        </div>
+        <span class="li-badge err"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>Reparación</span>
+        <button class="hist-pill" data-hist="2" type="button">Ver informe</button>
+      </div>
+      <div class="list-row">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3 3 0 0 1-3.9 3.9L4 17v3h3l6.8-6.8a3 3 0 0 1 3.9-3.9l-2 2-1.4-1.4z" stroke="#b3a57e" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+        <div class="li-txt">
+          <strong>Mantención preventiva</strong>
+          <small>02/11/2023 · Servicio programado 250h · Téc. Pedro Silva</small>
+        </div>
+        <span class="li-badge ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Preventiva</span>
+        <button class="hist-pill" data-hist="3" type="button">Ver informe</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASO 9: DOCUMENTOS -->
+  <div class="stage step-fade hidden centered" id="step-documentos">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-documentos" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Manuales</div>
+    </div>
+    <div class="swipe-dots"><span class="dot"></span><span class="dot"></span><span class="dot active"></span><span class="dot"></span></div>
+
+    <div class="id-card">
+      <div>
+        <div class="lbl">ID TagSense</div>
+        <div class="val">TS-CAEX-0000125</div>
+      </div>
+      <div class="copy-ic" role="button" tabindex="0" aria-label="Copiar ID del equipo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <img class="truck-photo" alt="Camión Minero MT65S" loading="lazy">
+    </div>
+
+    <div class="list-card">
+      <div class="list-row manual-accordion-row" id="manual-accordion-toggle" role="button" tabindex="0" aria-expanded="true" aria-label="Contraer Manual Técnico MT65S">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12h6M9 16h6" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="li-txt">
+          <strong>Manual Técnico MT65S</strong>
+          <small>PDF · 8 KB · Actualizado 10/01/2024</small>
+        </div>
+        <div class="accordion-chevron" id="manual-accordion-chevron">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#a8a6a2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="manual-accordion-panel open" id="manual-accordion-panel">
+        <p class="accordion-label">Acceso Rápido</p>
+        <div class="manual-qa-grid">
+          <div class="manual-qa-tile" data-doc="plano">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>Plano Hidráulico</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="plano_electrico">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>Plano Eléctrico</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="plano_neumatico">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#b3a57e" stroke-width="1.6"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Plano Neumático</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="aceites">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>Aceites</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="procedimientos">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="12" height="16" rx="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M9 3h6v3H9z" fill="#b3a57e"/><path d="M9 11h6M9 15h4" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Procedimientos</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="manual_servicio">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 0-5.4 4.7L4 16.3V20h3.7l5.3-5.3a4 4 0 0 0 4.7-5.4l-2.6 2.6-2-2 2.6-2.6Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>Manual de Servicio</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="inspecciones">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M8 10l2.5 2.5L16 7" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Inspecciones</span>
+          </div>
+          <div class="manual-qa-tile" data-doc="manual_repuestos">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8l9 5 9-5M12 13v8" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <span>Manual de Repuestos</span>
+          </div>
+        </div>
+        <div class="manual-open-full" id="manual-open-full" role="button" tabindex="0">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 4v13" stroke="#b3a57e" stroke-width="1.6"/></svg>
+          <span>Abrir manual completo</span>
+          <svg class="chev-right" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#a8a6a2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="manual-index-panel" id="manual-index-panel">
+          <div id="manual-index-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASO 10: REPUESTOS -->
+  <div class="stage step-fade hidden centered" id="step-repuestos">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-repuestos" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Componentes del Activo</div>
+    </div>
+    <div class="swipe-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot active"></span></div>
+
+    <div class="id-card">
+      <div>
+        <div class="lbl">ID TagSense</div>
+        <div class="val">TS-CAEX-0000125</div>
+      </div>
+      <div class="copy-ic" role="button" tabindex="0" aria-label="Copiar ID del equipo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <img class="truck-photo" alt="Camión Minero MT65S" loading="lazy">
+    </div>
+
+    <p class="comp-section-label">Componentes Críticos</p>
+    <div id="comp-criticos-list"></div>
+
+  </div>
+
+
+  <!-- INSTRUCTIVOS DE VERIFICACIÓN: LISTA -->
+  <div class="stage step-fade hidden centered" id="step-instructivos">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-instructivos" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Instructivos</div>
+    </div>
+
+    <p class="comp-section-label" style="margin-top:4px;">Verificación en terreno</p>
+    <div id="instructivos-list" style="width:100%;"></div>
+  </div>
+
+  <!-- SOLICITUDES DE MANTENIMIENTO -->
+  <div class="stage step-fade hidden centered" id="step-solicitudes">
+    <div class="detail-topbar">
+      <div class="detail-back" id="back-solicitudes" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Solicitudes de Mantenimiento</div>
+    </div>
+
+    <p class="comp-section-label" style="margin-top:4px;">Generadas desde los informes de este equipo</p>
+    <div id="sm-list" style="width:100%;"></div>
+  </div>
+
+
+  <!-- PASO 12: LECTOR DE DOCUMENTOS (genérico, reutilizable) -->
+  <div class="stage step-fade hidden doc-reader-stage" id="step-doc-reader">
+    <div class="detail-topbar" style="padding:0 0 12px;">
+      <div class="detail-back" id="back-doc-reader" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Documento</div>
+    </div>
+
+    <div class="doc-reader-header">
+      <div class="doc-title" id="doc-title">—</div>
+      <div class="doc-subtitle" id="doc-subtitle"></div>
+      <div class="doc-meta" id="doc-meta"></div>
+    </div>
+
+    <div class="doc-body" id="doc-body"></div>
+  </div>
+
+  <!-- PASO 13: FORMULARIO DE INFORME DE MANTENIMIENTO -->
+  <div class="stage step-fade hidden report-stage" id="step-informe">
+    <div class="detail-topbar" style="padding:0 0 12px;">
+      <div class="detail-back" id="back-informe" role="button" tabindex="0" aria-label="Volver">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Informe de Mantenimiento</div>
+    </div>
+
+    <div class="report-section-label">Datos del trabajo</div>
+    <div class="report-readonly-grid">
+      <div class="report-readonly-item">
+        <div class="lbl">Equipo</div>
+        <div class="val">Camión MT65S</div>
+      </div>
+      <div class="report-readonly-item">
+        <div class="lbl">ID TagSense</div>
+        <div class="val">TS-CAEX-0000125</div>
+      </div>
+      <div class="report-readonly-item">
+        <div class="lbl">Técnico</div>
+        <div class="val" id="informe-tecnico">usuario</div>
+      </div>
+      <div class="report-readonly-item">
+        <div class="lbl">Fecha</div>
+        <div class="val" id="informe-fecha">—</div>
+      </div>
+    </div>
+
+    <div class="report-field-row">
+      <div class="report-field-col">
+        <label class="report-field-label">Horómetro *</label>
+        <input type="text" class="report-input" id="informe-horometro" inputmode="numeric" placeholder="Ej: 8.812 h" required>
+      </div>
+      <div class="report-field-col">
+        <label class="report-field-label">Hora inicio *</label>
+        <input type="time" class="report-input" id="informe-hora-inicio" required>
+      </div>
+      <div class="report-field-col">
+        <label class="report-field-label">Hora término *</label>
+        <input type="time" class="report-input" id="informe-hora-termino" required>
+      </div>
+    </div>
+
+    <div class="report-section-label">Descripción del trabajo realizado</div>
+    <textarea class="comment-box" id="informe-descripcion" maxlength="600" placeholder="Ej: se revisó fuga en sello hidráulico, se cambió filtro de aceite..."></textarea>
+
+    <div class="report-section-label">Fallas encontradas</div>
+    <div class="severity-row">
+      <div class="severity-chip sel-baja" id="sev-baja" role="button" tabindex="0">Baja</div>
+      <div class="severity-chip sel-media" id="sev-media" role="button" tabindex="0">Media</div>
+      <div class="severity-chip sel-alta" id="sev-alta" role="button" tabindex="0">Alta</div>
+    </div>
+    <textarea class="comment-box" id="informe-fallas" maxlength="500" placeholder="Ej: se detectó fuga leve en manguera de retorno, sin riesgo inmediato..."></textarea>
+
+    <div class="report-section-label">Repuestos utilizados</div>
+    <div class="yn-pill-row">
+      <div class="yn-pill" id="repuestos-si" role="button" tabindex="0">Sí</div>
+      <div class="yn-pill selected" id="repuestos-no" role="button" tabindex="0">No</div>
+    </div>
+    <textarea class="comment-box hidden" id="informe-repuestos-detalle" maxlength="400" placeholder="Detalla los repuestos utilizados (nombre y/o código de repuesto)..."></textarea>
+
+    <div class="report-section-label">¿Utilizó instructivos de verificación?</div>
+    <div class="yn-pill-row">
+      <div class="yn-pill" id="instr-usados-si" role="button" tabindex="0">Sí</div>
+      <div class="yn-pill selected" id="instr-usados-no" role="button" tabindex="0">No</div>
+    </div>
+    <div class="comp-chip-row hidden" id="instr-usados-row"></div>
+
+    <div class="report-section-label">Alcances técnicos y recomendaciones del mantenedor</div>
+    <p class="field-hint">Tips de terreno, precauciones o mejoras al procedimiento. Ej: "Despresurizar el sistema hidráulico antes de intervenir."</p>
+    <textarea class="comment-box" id="informe-alcances" maxlength="500" placeholder="Comparte lo que aprendiste en esta intervención..."></textarea>
+
+    <div class="report-section-label">Componente intervenido</div>
+    <div class="comp-chip-row" id="comp-intervenido-row">
+      <div class="comp-chip selected" data-comp="ninguno" role="button" tabindex="0">Ninguno</div>
+      <div class="comp-chip" data-comp="motor" role="button" tabindex="0">Motor</div>
+      <div class="comp-chip" data-comp="transmision" role="button" tabindex="0">Transmisión</div>
+      <div class="comp-chip" data-comp="hidraulico" role="button" tabindex="0">Hidráulico</div>
+      <div class="comp-chip" data-comp="frenos" role="button" tabindex="0">Frenos</div>
+      <div class="comp-chip" data-comp="mandos" role="button" tabindex="0">Mandos Finales</div>
+    </div>
+
+    <div class="report-section-label hidden" id="empresa-section-label">Empresa que intervino</div>
+    <div class="yn-pill-row hidden" id="empresa-tipo-row">
+      <div class="yn-pill selected" id="empresa-interno" role="button" tabindex="0">Interno Pucobre</div>
+      <div class="yn-pill" id="empresa-externo" role="button" tabindex="0">Proveedor Externo</div>
+    </div>
+    <input type="text" class="report-input hidden" id="empresa-externo-nombre" list="empresas-recientes" placeholder="Nombre del proveedor / taller externo" style="margin-bottom:16px;">
+    <datalist id="empresas-recientes"></datalist>
+
+    <div class="report-section-label">Checklist</div>
+    <div class="checklist-row">
+      <span>Equipo queda operativo</span>
+      <button class="toggle-switch on" id="check-operativo" type="button" role="switch" aria-checked="true" aria-label="Equipo queda operativo"></button>
+    </div>
+
+    <div class="report-section-label">¿Aplica una Solicitud de Mantenimiento (SM)?</div>
+    <p class="field-hint">Repuesto pendiente, inspección técnica, monitoreo predictivo o cualquier seguimiento que exceda esta intervención.</p>
+    <div class="yn-pill-row">
+      <div class="yn-pill" id="sm-si" role="button" tabindex="0">Sí</div>
+      <div class="yn-pill selected" id="sm-no" role="button" tabindex="0">No</div>
+    </div>
+    <div id="sm-fields" class="hidden">
+      <div class="report-section-label" style="margin-top:0;">Tipo de solicitud</div>
+      <div class="comp-chip-row" id="sm-tipo-row">
+        <div class="comp-chip" data-sm-tipo="Repuesto" role="button" tabindex="0">Repuesto</div>
+        <div class="comp-chip" data-sm-tipo="Inspección técnica" role="button" tabindex="0">Inspección técnica</div>
+        <div class="comp-chip" data-sm-tipo="Monitoreo predictivo" role="button" tabindex="0">Monitoreo predictivo</div>
+        <div class="comp-chip" data-sm-tipo="Otro" role="button" tabindex="0">Otro</div>
+      </div>
+
+      <div class="report-section-label">Prioridad</div>
+      <div class="comp-chip-row" id="sm-prioridad-row">
+        <div class="comp-chip" data-sm-prioridad="Baja" role="button" tabindex="0">Baja</div>
+        <div class="comp-chip" data-sm-prioridad="Media" role="button" tabindex="0">Media</div>
+        <div class="comp-chip" data-sm-prioridad="Alta" role="button" tabindex="0">Alta</div>
+        <div class="comp-chip" data-sm-prioridad="Urgente" role="button" tabindex="0">Urgente</div>
+      </div>
+
+      <div class="report-section-label">Componente asociado</div>
+      <div class="comp-chip-row" id="sm-componente-row">
+        <div class="comp-chip" data-sm-comp="motor" role="button" tabindex="0">Motor</div>
+        <div class="comp-chip" data-sm-comp="transmision" role="button" tabindex="0">Transmisión</div>
+        <div class="comp-chip" data-sm-comp="hidraulico" role="button" tabindex="0">Hidráulico</div>
+        <div class="comp-chip" data-sm-comp="frenos" role="button" tabindex="0">Frenos</div>
+        <div class="comp-chip" data-sm-comp="mandos" role="button" tabindex="0">Mandos Finales</div>
+      </div>
+
+      <div class="report-section-label">Descripción de la solicitud</div>
+      <textarea class="comment-box" id="sm-descripcion" maxlength="400" placeholder="Qué se detectó y por qué requiere seguimiento..."></textarea>
+    </div>
+
+    <div class="report-section-label">Recomendaciones</div>
+    <textarea class="comment-box" id="informe-observaciones" maxlength="400" placeholder="Ej: se sugiere programar revisión del sistema hidráulico en próxima mantención..."></textarea>
+
+    <div class="report-section-label">Fotografías</div>
+    <input type="file" id="informe-foto-input" accept="image/*" multiple style="display:none;">
+    <div class="photo-add-btn" id="informe-foto-btn" role="button" tabindex="0">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h3l2-3h6l2 3h3v13H4V7Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" stroke="#b3a57e" stroke-width="1.6"/></svg>
+      <span>Agregar fotos desde la galería</span>
+    </div>
+    <div class="photo-thumbs" id="informe-foto-thumbs"></div>
+
+    <div class="report-section-label">Firma del técnico</div>
+    <div class="signature-wrap">
+      <canvas id="signature-canvas"></canvas>
+    </div>
+    <div class="signature-controls">
+      <span class="signature-hint">Firma con el dedo dentro del recuadro</span>
+      <button class="signature-clear" id="signature-clear" type="button">Borrar</button>
+    </div>
+
+    <button class="report-generate-btn" id="btn-preview-informe" type="button" disabled>
+      Vista previa y validar
+    </button>
+  </div>
+
+  <!-- PASO 14: VISTA PREVIA Y ENVÍO DEL INFORME -->
+  <div class="stage step-fade hidden report-stage" id="step-informe-preview">
+    <div class="detail-topbar" style="padding:0 0 12px;">
+      <div class="detail-back" id="back-informe-preview" role="button" tabindex="0" aria-label="Volver a editar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="detail-title">Vista Previa</div>
+    </div>
+
+    <div class="report-preview-doc" id="report-preview-content"></div>
+
+    <div class="report-send-row">
+      <a class="report-pdf-btn" id="report-pdf-btn" download style="text-decoration:none;">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Descargar PDF
+      </a>
+      <button class="wa-send-btn" id="btn-informe-whatsapp" type="button">
+        <svg viewBox="0 0 24 24" fill="#0a2413"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.32A9.94 9.94 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2Zm5.2 14.15c-.22.62-1.29 1.2-1.78 1.24-.46.05-1.04.07-1.68-.1-.39-.11-.89-.28-1.53-.55-2.7-1.17-4.46-3.9-4.6-4.08-.13-.18-1.1-1.47-1.1-2.8 0-1.33.7-1.98.95-2.25.24-.27.53-.34.71-.34h.5c.16 0 .38-.06.59.45.22.53.75 1.83.81 1.96.07.13.11.28.02.46-.09.18-.14.29-.27.45-.13.16-.28.35-.4.47-.13.13-.27.28-.12.55.16.27.7 1.16 1.5 1.88 1.03.92 1.9 1.21 2.17 1.35.27.13.43.11.59-.07.16-.18.68-.79.86-1.06.18-.27.36-.22.6-.13.24.09 1.54.73 1.8.86.27.13.44.2.51.31.07.11.07.63-.15 1.25Z"/></svg>
+        <span id="wa-btn-label">Enviar por WhatsApp</span>
       </button>
-    </nav>
+    </div>
+  </div>
 
-    <!-- PWA & APPLICATION JAVASCRIPT LOGIC -->
-    <script>
-      // GLOBAL STATE
-      const state = {
-        isOnline: true,
-        currentAsset: "MT65S",
-        activeView: "inicio",
-        diagnosticData: {
-          sistema: "",
-          componente: "",
-          checks: [],
-        },
-      };
+</div>
 
-      // VIEW SWITCHER
-      function switchView(viewId) {
-        state.activeView = viewId;
-        document
-          .querySelectorAll(".view-section")
-          .forEach((el) => el.classList.remove("active"));
-        const targetView = document.getElementById(`view-${viewId}`);
-        if (targetView) targetView.classList.add("active");
+<div class="qr-overlay hidden" id="qr-overlay" role="dialog" aria-modal="true" aria-label="Escáner de código QR">
+  <video id="qr-video" playsinline autoplay muted></video>
+  <canvas id="qr-canvas" class="hidden"></canvas>
+  <div class="qr-frame" aria-hidden="true"></div>
+  <div class="qr-overlay-bar">
+    <button class="qr-icon-btn" id="qr-close-btn" type="button" aria-label="Cerrar escáner">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="qr-icon-btn hidden" id="qr-torch-btn" type="button" aria-label="Encender linterna">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 2h6l-1 7h3l-8 13 2-9H8l1-11Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <p class="qr-overlay-hint" id="qr-overlay-hint">Apunta la cámara al código QR del activo</p>
+  <p class="qr-overlay-error hidden" id="qr-overlay-error"></p>
+</div>
 
-        document
-          .querySelectorAll(".nav-item")
-          .forEach((el) => el.classList.remove("active"));
-        const activeNav = document.getElementById(`nav-${viewId}`);
-        if (activeNav) activeNav.classList.add("active");
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="assets/js/app.js"></script>
 
-        window.scrollTo(0, 0);
-      }
-
-      // ONLINE / OFFLINE TOGGLE SIMULATION
-      function toggleOnlineStatus() {
-        state.isOnline = !state.isOnline;
-        const statusBadge = document.getElementById("network-status");
-        const statusText = document.getElementById("network-text");
-
-        if (state.isOnline) {
-          statusBadge.classList.remove("offline");
-          statusText.innerText = "ONLINE";
-        } else {
-          statusBadge.classList.add("offline");
-          statusText.innerText = "OFFLINE (LOCAL)";
-        }
-      }
-
-      // SELECT ASSET
-      function selectAsset(assetKey) {
-        state.currentAsset = assetKey;
-        const title = document.getElementById("asset-det-title");
-        const id = document.getElementById("asset-det-id");
-
-        if (assetKey === "MT65S") {
-          title.innerText = "Camión Minero MT65S";
-          id.innerText = "ID: TS-CAEX-000125";
-        } else {
-          title.innerText = "Scooptram LHD (ST14)";
-          id.innerText = "ID: TS-LHD-000084";
-        }
-        switchView("activo");
-      }
-
-      // SIMULATE TAG SCANNING (NFC/QR)
-      function simulateTagScan(tagCode) {
-        const textEl = document.getElementById("scan-status-text");
-        textEl.innerText = "⏳ LEYENDO SENSOR TAGSENSE...";
-        textEl.style.color = "var(--accent-orange)";
-
-        setTimeout(() => {
-          textEl.innerText = "✅ CÓDIGO TAGSENSE VALIDADO";
-          textEl.style.color = "var(--status-online)";
-          setTimeout(() => {
-            selectAsset("MT65S");
-          }, 800);
-        }, 1200);
-      }
-
-      // REAL WEB NFC API SUPPORT
-      async function startRealNFCScan() {
-        if ("NDEFReader" in window) {
-          try {
-            const ndef = new NDEFReader();
-            await ndef.scan();
-            document.getElementById("scan-status-text").innerText =
-              "📡 NDEV ACTIVO: ACERCA EL TAG AL TELÉFONO";
-            ndef.addEventListener("reading", ({ message, serialNumber }) => {
-              alert(`Tag detectado! Serie: ${serialNumber}`);
-              selectAsset("MT65S");
-            });
-          } catch (error) {
-            alert("Error al iniciar NFC: " + error);
-          }
-        } else {
-          alert(
-            "Web NFC no está soportado en este navegador/dispositivo. Utiliza la simulación táctil.",
-          );
-        }
-      }
-
-      // MODULE DETAILS DISPLAY
-      function openModule(moduleKey) {
-        const container = document.getElementById("module-content-display");
-        const title = document.getElementById("module-display-title");
-        const body = document.getElementById("module-display-body");
-
-        container.style.display = "block";
-
-        const moduleData = {
-          info: {
-            title: "Información General & Especificaciones",
-            html: `
-            <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
-              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Fabricante / Modelo:</td><td style="color:#FFF; font-weight:bold;">Epiroc MT65S</td></tr>
-              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Capacidad de Carga:</td><td style="color:#FFF; font-weight:bold;">65.000 kg (65 Ton)</td></tr>
-              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Presión Sistema Hidráulico:</td><td style="color:#FFF; font-weight:bold;">250 Bar (3625 PSI)</td></tr>
-              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Torque Pernos Rueda:</td><td style="color:#FFF; font-weight:bold;">750 Nm</td></tr>
-            </table>
-          `,
-          },
-          docs: {
-            title: "Manuales y Documentos OEM",
-            html: `
-            <ul style="list-style:none; line-height:2;">
-              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Manual de Servicio - Sistema Hidráulico MT65S.pdf</a></li>
-              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Esquema Eléctrico y Diagrama de Bloques v3.2.pdf</a></li>
-              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Pauta de Mantenimiento Preventivo 500 Hrs.pdf</a></li>
-            </ul>
-          `,
-          },
-          historial: {
-            title: "Historial de Intervenciones",
-            html: `
-            <div style="border-left:2px solid var(--accent-orange); padding-left:10px; font-size:0.8rem;">
-              <div style="color:#FFF; font-weight:bold;">15/05/2026 - Cambio de Filtros de Retorno</div>
-              <div style="color:var(--text-muted);">Técnico: Carlos Mendoza • Duración: 2.5 hrs</div>
-              <br>
-              <div style="color:#FFF; font-weight:bold;">02/04/2026 - Inspección Preventiva 12.000 Hrs</div>
-              <div style="color:var(--text-muted);">Técnico: Juan Pérez • Sin novedades críticas</div>
-            </div>
-          `,
-          },
-          fotos: {
-            title: "Registro Fotográfico del Activo",
-            html: `
-            <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;">
-              <div style="background:#000; height:80px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#666;">Vista Frontal</div>
-              <div style="background:#000; height:80px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#666;">Cilindro Tolva</div>
-            </div>
-          `,
-          },
-          repuestos: {
-            title: "Catálogo de Repuestos Frecuentes",
-            html: `
-            <ul style="list-style:none; font-size:0.85rem; line-height:1.8;">
-              <li>• Flexible Hidráulico 1" x 1200mm (P/N: EP-9821-A)</li>
-              <li>• Elemento Filtrante Aceite (P/N: EP-3312-F)</li>
-              <li>• Kit Sellos Cilindro Levante (P/N: EP-7700-K)</li>
-            </ul>
-          `,
-          },
-          inspecciones: {
-            title: "Checklists Pre-Uso / Pautas",
-            html: `
-            <div style="font-size:0.85rem;">
-              <label><input type="checkbox" checked> Nivel de Aceite Hidráulico OK</label><br>
-              <label><input type="checkbox" checked> Estado de Neumáticos y Torque OK</label><br>
-              <label><input type="checkbox" checked> Sistema de Extinción Fuego Cargado</label>
-            </div>
-          `,
-          },
-          mantenedores: {
-            title: "Mantenedores Asignados",
-            html: `
-            <div style="font-size:0.85rem;">
-              👤 <strong>Juan Pérez</strong> (Especialista Hidráulico)<br>
-              👤 <strong>Miguel Arancibia</strong> (Electromecánico Mina)
-            </div>
-          `,
-          },
-        };
-
-        if (moduleData[moduleKey]) {
-          title.innerText = moduleData[moduleKey].title;
-          body.innerHTML = moduleData[moduleKey].html;
-        }
-      }
-
-      // AI VIRTUAL ASSISTANT CHAT FLOW
-      function handleAssistantStep(step, value) {
-        const chatBox = document.getElementById("chat-box");
-
-        if (step === 1) {
-          state.diagnosticData.sistema = value;
-          chatBox.innerHTML += `
-          <div class="chat-msg user">
-            <div class="chat-avatar" style="background:#555;">JP</div>
-            <div class="chat-bubble">${value}</div>
-          </div>
-          <div class="chat-msg">
-            <div class="chat-avatar">IA</div>
-            <div class="chat-bubble">
-              Seleccione el componente específico con anomalía en el sistema de <strong>${value}</strong>:
-              <div class="options-grid">
-                <div class="option-chip" onclick="handleAssistantStep(2, 'Flexible hidráulico')">Flexible hidráulico</div>
-                <div class="option-chip" onclick="handleAssistantStep(2, 'Cilindro')">Cilindro</div>
-                <div class="option-chip" onclick="handleAssistantStep(2, 'Válvula')">Válvula</div>
-                <div class="option-chip" onclick="handleAssistantStep(2, 'Conexión')">Conexión</div>
-              </div>
-            </div>
-          </div>
-        `;
-        } else if (step === 2) {
-          state.diagnosticData.componente = value;
-          chatBox.innerHTML += `
-          <div class="chat-msg user">
-            <div class="chat-avatar" style="background:#555;">JP</div>
-            <div class="chat-bubble">${value}</div>
-          </div>
-          <div class="chat-msg">
-            <div class="chat-avatar">IA</div>
-            <div class="chat-bubble">
-              Pauta de validación OEM para <strong>${value}</strong>. Revise y valide los siguientes puntos en terreno:
-              <ul class="check-list">
-                <li class="check-item"><input type="checkbox" checked> Conexión superior sin fugas</li>
-                <li class="check-item"><input type="checkbox" checked> Conexión inferior sin deformación</li>
-                <li class="check-item"><input type="checkbox" checked> Ausencia de abrasión por roce</li>
-                <li class="check-item"><input type="checkbox" checked> Presión nominal dentro de rango (250 Bar)</li>
-                <li class="check-item"><input type="checkbox" checked> Torque de acople verificado</li>
-              </ul>
-              <button class="btn btn-primary" style="margin-top:10px;" onclick="generateReportFromAssistant()">
-                📄 GENERAR INFORME TÉCNICO DE INTERVENCIÓN
-              </button>
-            </div>
-          </div>
-        `;
-        }
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
-
-      function generateReportFromAssistant() {
-        document.getElementById("report-diag-text").innerText =
-          `Fuga / Anomalía en ${state.diagnosticData.componente || "Flexible Hidráulico"} (${state.diagnosticData.sistema || "Sistema Levante Tolva"})`;
-        switchView("reporte");
-      }
-
-      // INITIALIZE DIGITAL SIGNATURE CANVAS
-      window.addEventListener("load", () => {
-        const canvas = document.getElementById("signature-pad");
-        if (canvas) {
-          const ctx = canvas.getContext("2d");
-          let drawing = false;
-
-          function startDraw(e) {
-            drawing = true;
-            draw(e);
-          }
-          function endDraw() {
-            drawing = false;
-            ctx.beginPath();
-          }
-          function draw(e) {
-            if (!drawing) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
-            ctx.lineWidth = 2;
-            ctx.lineCap = "round";
-            ctx.strokeStyle = "#0F172A";
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-          }
-
-          canvas.addEventListener("mousedown", startDraw);
-          canvas.addEventListener("mouseup", endDraw);
-          canvas.addEventListener("mousemove", draw);
-          canvas.addEventListener("touchstart", startDraw);
-          canvas.addEventListener("touchend", endDraw);
-          canvas.addEventListener("touchmove", draw);
-        }
-      });
-
-      // PWA SERVICE WORKER REGISTRATION VIA BLOB
-      if ("serviceWorker" in navigator) {
-        const swCode = `
-        self.addEventListener('install', e => self.skipWaiting());
-        self.addEventListener('activate', e => self.clients.claim());
-        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response('Modo Offline Activo'))));
-      `;
-        const blob = new Blob([swCode], { type: "application/javascript" });
-        navigator.serviceWorker
-          .register(URL.createObjectURL(blob))
-          .catch(() => {});
-      }
-    </script>
-  </body>
+</body>
 </html>
