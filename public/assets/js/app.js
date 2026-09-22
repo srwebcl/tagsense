@@ -6,19 +6,11 @@ document.querySelectorAll('img.truck-photo').forEach(img => img.src = TRUCK_PHOT
 // ---- Navegación entre pantallas ----
 // ================= REGISTRO DE ACTIVOS (multi-equipo) =================
 
-const ACTIVOS = {
-  "TS-CAEX-0000125": {
-    nombre: "Camión Minero MT65S",
-    serie: "CAT0MT65SFKY100123",
-    anio: "2021",
-    horometro: "8.745 h",
-    ubicacion: "Mina Rajo Sur - Banco 12",
-    estado: "Operativo",
-    foto: null, // usa TRUCK_PHOTO (foto real ya existente)
-  },
-};
+// Vacío a propósito: ya no hay datos mock. Se llena en runtime desde /api/assets/:tag_code
+// (ver resolverActivoEscaneado) y sirve de caché local para reconsultar el mismo activo offline.
+const ACTIVOS = {};
 
-let activoActualId = "TS-CAEX-0000125";
+let activoActualId = null;
 
 function aplicarActivo(id){
   const a = ACTIVOS[id];
@@ -51,18 +43,12 @@ function aplicarActivo(id){
 }
 
 // ---- Apertura directa por tag NFC (URL con ?activo=ID) ----
-// Cuando se graba un tag NFC físico con esta misma URL, Android la abre automáticamente
-// al acercar el teléfono, sin pasar por login ni por el escaneo simulado.
-function manejarAperturaPorNFC(){
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get('activo');
-  if (id && ACTIVOS[id]) {
-    sessionAuthenticated = true; // apertura directa por NFC no requiere login
-    goTo('step-read');
-    ejecutarLecturaNFC(2000, id, 'step-confirm-3');
-    return true;
-  }
-  return false;
+// Cuando se graba un tag NFC físico con esta misma URL, Android/iOS la abre
+// automáticamente al acercar el teléfono. Como el activo ahora vive en una base
+// de datos real por tenant, ya no se puede saltar el login: si no hay sesión
+// válida, el código queda pendiente y se resuelve apenas el técnico inicia sesión.
+function idActivoDesdeUrl(){
+  return new URLSearchParams(window.location.search).get('activo');
 }
 
 const steps = ['step-access','step-welcome','step-read','step-confirm-2','step-confirm-3','step-asistente','step-info-general','step-historial','step-documentos','step-repuestos','step-instructivos','step-solicitudes','step-doc-reader','step-informe','step-informe-preview'];
@@ -131,34 +117,75 @@ function nombreDesdeCorreo(correo){
     .join(' ');
 }
 
-// Credencial de acceso (modo demo): solo este correo y contraseña permiten ingresar.
-const CREDENCIAL_VALIDA = { correo: 'gonzalo.quintriqueo@tagsense.cl', clave: '1234' };
+// ---- Login real contra Neon Auth (vía el proxy same-origin /api/auth/*) ----
+// El primer login siempre necesita conexión (no hay forma de validar una contraseña
+// contra el servidor sin red) — el resto del flujo de campo después de loguearse
+// sigue funcionando 100% offline, sin cambios (ver /skills/offline-sync/SKILL.md).
+function mostrarErrorLogin(mensaje){
+  const emailWrap = emailInput.closest('.input-wrap');
+  const passWrap = passwordInput.closest('.input-wrap');
+  const errorMsg = document.getElementById('login-error');
+  emailWrap.classList.add('invalid');
+  passWrap.classList.add('invalid');
+  errorMsg.textContent = mensaje;
+  errorMsg.classList.remove('hidden');
+  hapticPulse();
+}
 
-accessBtn.addEventListener('click', () => {
+accessBtn.addEventListener('click', async () => {
   const correoIngresado = emailInput.value.trim().toLowerCase();
   const claveIngresada = passwordInput.value;
   const emailWrap = emailInput.closest('.input-wrap');
   const passWrap = passwordInput.closest('.input-wrap');
   const errorMsg = document.getElementById('login-error');
 
-  const valido = correoIngresado === CREDENCIAL_VALIDA.correo && claveIngresada === CREDENCIAL_VALIDA.clave;
-
-  if (!valido) {
-    emailWrap.classList.add('invalid');
-    passWrap.classList.add('invalid');
-    errorMsg.classList.remove('hidden');
-    hapticPulse();
+  if (!correoIngresado || !claveIngresada) {
+    mostrarErrorLogin('Ingresa tu correo y contraseña.');
     return;
   }
 
-  emailWrap.classList.remove('invalid');
-  passWrap.classList.remove('invalid');
-  errorMsg.classList.add('hidden');
+  if (!navigator.onLine) {
+    mostrarErrorLogin('Necesitas conexión para iniciar sesión la primera vez. Intenta de nuevo con señal.');
+    return;
+  }
 
-  const nombre = nombreDesdeCorreo(emailInput.value.trim());
-  welcomeName.textContent = nombre || 'usuario';
-  sessionAuthenticated = true;
-  goTo('step-confirm-2');
+  accessBtn.disabled = true;
+
+  try {
+    const resp = await fetch('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: correoIngresado, password: claveIngresada }),
+    });
+    const data = await resp.json().catch(() => null);
+
+    if (!resp.ok || !data || !data.user) {
+      mostrarErrorLogin('Correo o contraseña incorrectos. Intenta nuevamente.');
+      return;
+    }
+
+    emailWrap.classList.remove('invalid');
+    passWrap.classList.remove('invalid');
+    errorMsg.classList.add('hidden');
+
+    const nombre = data.user.name || nombreDesdeCorreo(correoIngresado);
+    welcomeName.textContent = nombre || 'usuario';
+    sessionAuthenticated = true;
+
+    if (pendingActivoId) {
+      const idPendiente = pendingActivoId;
+      pendingActivoId = null;
+      goTo('step-read');
+      const resuelto = await resolverActivoEscaneado(idPendiente, { origen: 'nfc-url' });
+      if (!resuelto) mostrarHintLectura('No se pudo cargar el activo del tag. Intenta de nuevo o usa QR.');
+    } else {
+      goTo('step-confirm-2');
+    }
+  } catch (err) {
+    mostrarErrorLogin('No se pudo conectar con el servidor. Intenta nuevamente.');
+  } finally {
+    accessBtn.disabled = false;
+  }
 });
 
 [emailInput, passwordInput].forEach(input => {
@@ -204,7 +231,8 @@ function detectionFeedback(){
 }
 
 let readState = 'idle'; // idle | reading | found
-let sessionAuthenticated = false; // true tras el primer login exitoso en esta sesión
+let sessionAuthenticated = false; // true tras confirmar sesión (login o cookie válida al cargar)
+let pendingActivoId = null; // código de ?activo=ID pendiente de resolver tras el login
 const nfcCore = document.querySelector('.nfc-core');
 
 function resetReadState(){
@@ -223,50 +251,10 @@ function resetReadState(){
   nfcCore.classList.remove('active');
 }
 
-// ---- Selector de activo a simular (para probar sin tags NFC físicos aún) ----
-let activoParaSimular = 'TS-CAEX-0000125';
-document.querySelectorAll('.asset-chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    document.querySelectorAll('.asset-chip').forEach(c => c.classList.remove('selected'));
-    chip.classList.add('selected');
-    activoParaSimular = chip.dataset.activo;
-  });
-});
-
-// ---- Secuencia de detección unificada (auto-inicio, radar, confirmación en verde) ----
-// duracionMs: tiempo total de "lectura" antes de confirmar. Se usa tanto para el
-// auto-inicio sin tocar (2s) como para el tap manual (instantáneo).
+// Se mantiene declarado porque resetReadState/resolverActivoEscaneado lo limpian
+// defensivamente; ya no hay ningún setTimeout real que lo asigne (ver historial de
+// git si se necesita recuperar la animación de auto-lectura simulada).
 let autoLecturaTimer = null;
-function ejecutarLecturaNFC(duracionMs, activoId, destinoFinal){
-  if (readState !== 'idle') return;
-  readState = 'reading';
-  clearTimeout(autoLecturaTimer);
-  nfcCore.classList.remove('pulsing');
-  nfcCore.classList.add('active');
-  nfcCircle.classList.add('reading');
-  nfcMainText.textContent = 'Leyendo activo';
-  ringProgress.style.transition = `stroke-dashoffset ${duracionMs}ms linear`;
-  ringProgress.style.strokeDashoffset = '0';
-
-  setTimeout(() => {
-    readState = 'found';
-    nfcCircle.classList.remove('reading');
-    nfcCircle.classList.add('success');
-    nfcCore.classList.add('success');
-    ringProgress.classList.add('success');
-    nfcCheck.classList.add('show', 'success');
-
-    const id = activoId || activoParaSimular;
-    const nombreEquipo = (ACTIVOS[id] && ACTIVOS[id].nombre) || 'Equipo';
-    nfcMainText.textContent = nombreEquipo;
-    detectionFeedback();
-    aplicarActivo(id);
-
-    setTimeout(() => {
-      goTo(destinoFinal || (sessionAuthenticated ? 'step-confirm-2' : 'step-access'));
-    }, 550);
-  }, duracionMs);
-}
 
 nfcCircle.addEventListener('click', () => {
   // El círculo ya no simula una lectura falsa: un tap abre el escáner de cámara (QR),
@@ -2323,10 +2311,53 @@ document.querySelectorAll('.hist-pill').forEach(pill => {
 // Punto único por el que pasan NFC real, QR real y el ingreso manual, para no duplicar la
 // lógica de "activo encontrado / no encontrado" en cada método de lectura
 // (ver /tagsense-docs/skills/nfc-qr-scanning/SKILL.md, checklist final).
-function resolverActivoEscaneado(id, opciones){
+// Convierte la fila de la tabla `assets` (API real) al formato que ya usa la UI.
+// Sin columna de año de fabricación en el schema todavía — se deja en blanco, no se inventa.
+function mapearActivoDesdeApi(data){
+  const estadoLabel = { operativo: 'Operativo', mantenimiento: 'Mantención', fuera_de_servicio: 'Detenido' };
+  return {
+    nombre: data.name,
+    serie: data.serial_number || '—',
+    anio: '—',
+    horometro: data.hour_meter != null ? `${data.hour_meter} h` : '—',
+    ubicacion: data.location || '—',
+    estado: estadoLabel[data.status] || data.status || '—',
+    foto: null,
+  };
+}
+
+// Busca el activo en el backend real. Si la sesión expiró, manda de vuelta al login
+// en vez de fallar en silencio (ver skill offline-sync: nunca fallar silenciosamente).
+async function buscarActivoRemoto(id){
+  if (!navigator.onLine) return null;
+  try {
+    const resp = await fetch('/api/assets/' + encodeURIComponent(id));
+    if (resp.status === 401) {
+      sessionAuthenticated = false;
+      goTo('step-access');
+      return null;
+    }
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return mapearActivoDesdeApi(data);
+  } catch (err) {
+    return null; // sin red o backend caído: se trata igual que "no encontrado sin conexión"
+  }
+}
+
+async function resolverActivoEscaneado(id, opciones){
   opciones = opciones || {};
-  if (!id || !ACTIVOS[id]) return false;
+  if (!id) return false;
   if (readState === 'found') return true; // ya resuelto por otra vía (ej. NFC real mientras se mostraba QR)
+
+  // Primero la caché local (activos ya vistos antes) — permite reconsulta offline
+  // sin depender de la red (ver /tagsense-docs/skills/offline-sync/SKILL.md).
+  if (!ACTIVOS[id]) {
+    const activoRemoto = await buscarActivoRemoto(id);
+    if (!activoRemoto) return false;
+    ACTIVOS[id] = activoRemoto;
+  }
+
   readState = 'found';
   clearTimeout(autoLecturaTimer);
   nfcCircle.classList.remove('reading');
@@ -2510,12 +2541,12 @@ async function cicloEscaneoQR(){
 
     if (codigo) {
       const idResuelto = extraerCodigoActivo(codigo);
-      const manejado = resolverActivoEscaneado(idResuelto, { origen: 'qr' });
+      const manejado = await resolverActivoEscaneado(idResuelto, { origen: 'qr' });
       if (manejado) {
         cerrarEscanerQR();
         return;
       }
-      mostrarErrorQR('Código no reconocido. Intenta con otro tag.');
+      mostrarErrorQR(navigator.onLine ? 'Código no reconocido. Intenta con otro tag.' : 'Sin conexión y activo no visto antes. Intenta con red o ingresa el código manualmente.');
     }
   }
   if (qrScanningActive) qrRafId = requestAnimationFrame(cicloEscaneoQR);
@@ -2546,12 +2577,20 @@ if (btnManualCode) {
   });
 }
 
-function intentarCodigoManual(){
+async function intentarCodigoManual(){
   const valor = manualCodeInput.value.trim().toUpperCase();
   if (!valor) return;
-  const ok = resolverActivoEscaneado(valor, { origen: 'manual' });
-  manualCodeError.classList.toggle('hidden', ok);
-  if (!ok) hapticPulse();
+  manualCodeSubmit.disabled = true;
+  try {
+    const ok = await resolverActivoEscaneado(valor, { origen: 'manual' });
+    manualCodeError.textContent = navigator.onLine
+      ? 'Código no encontrado. Verifica e intenta nuevamente.'
+      : 'Sin conexión y activo no visto antes. Intenta con red o verifica el código.';
+    manualCodeError.classList.toggle('hidden', ok);
+    if (!ok) hapticPulse();
+  } finally {
+    manualCodeSubmit.disabled = false;
+  }
 }
 
 if (manualCodeSubmit) manualCodeSubmit.addEventListener('click', intentarCodigoManual);
@@ -2620,9 +2659,54 @@ if (!enModoStandalone) {
   }
 }
 
-// ---- Verifica si la app se abrió vía tag NFC (URL con ?activo=ID) ----
-const abrioViaNFC = manejarAperturaPorNFC();
-if (!abrioViaNFC) iniciarAutoLecturaNFC();
+// ---- Arranque: confirma sesión real contra el backend y decide la pantalla inicial ----
+// Los datos de activos ahora viven en una base real por tenant, así que ni la apertura
+// directa por tag NFC (?activo=ID) puede saltarse el login — solo se resuelve el activo
+// pendiente automáticamente apenas la sesión queda confirmada.
+async function verificarSesionActual(){
+  if (!navigator.onLine) return false; // sin red no hay forma de validar la sesión
+  try {
+    const resp = await fetch('/api/auth/get-session');
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    if (data && data.user) {
+      welcomeName.textContent = data.user.name || nombreDesdeCorreo(data.user.email) || 'usuario';
+      return true;
+    }
+  } catch (err) { /* backend caído o sin red: se trata como sesión no confirmada */ }
+  return false;
+}
+
+(async function iniciarApp(){
+  // step-read no tiene la clase "hidden" en el HTML crudo — sin este goTo() síncrono
+  // se alcanzaría a ver un flash de esa pantalla mientras se espera la verificación
+  // de sesión (que es asíncrona, por la llamada de red a /api/auth/get-session).
+  goTo('step-access');
+
+  const idDesdeUrl = idActivoDesdeUrl();
+  sessionAuthenticated = await verificarSesionActual();
+
+  if (idDesdeUrl && sessionAuthenticated) {
+    goTo('step-read');
+    const resuelto = await resolverActivoEscaneado(idDesdeUrl, { origen: 'nfc-url' });
+    if (!resuelto) mostrarHintLectura('No se pudo cargar el activo del tag. Intenta de nuevo o usa QR.');
+    return;
+  }
+
+  if (idDesdeUrl && !sessionAuthenticated) {
+    pendingActivoId = idDesdeUrl; // se resuelve automáticamente apenas se loguee
+    goTo('step-access');
+    return;
+  }
+
+  if (sessionAuthenticated) {
+    goTo('step-read');
+    iniciarModoLectura();
+    return;
+  }
+
+  goTo('step-access');
+})();
 
 // ---- Registro del Service Worker (PWA instalable + soporte offline) ----
 if ('serviceWorker' in navigator) {
