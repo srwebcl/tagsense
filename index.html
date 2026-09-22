@@ -1,0 +1,1648 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>TAGSENSE - Plataforma Inteligente para Activos Industriales</title>
+    <meta name="theme-color" content="#0B0E14" />
+    <meta
+      name="description"
+      content="Plataforma Inteligente para Activos Industriales - TagSense"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
+    <style>
+      /* ==========================================================================
+       TAGSENSE INDUSTRIAL DESIGN SYSTEM (Dark Industrial & Vivid Orange)
+       ========================================================================== */
+      :root {
+        --bg-dark: #0b0e14;
+        --bg-surface: #131722;
+        --bg-card: #1a1f2c;
+        --bg-card-hover: #22293a;
+        --accent-orange: #ff5500;
+        --accent-orange-glow: rgba(255, 85, 0, 0.35);
+        --accent-orange-light: #ff7733;
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border-color: #2a3245;
+        --status-online: #10b981;
+        --status-offline: #f59e0b;
+        --font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-family);
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+      }
+
+      /* HEADER */
+      .app-header {
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border-color);
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      .brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+      }
+      .brand-logo svg {
+        height: 28px;
+        width: auto;
+      }
+      .brand-title {
+        font-weight: 800;
+        font-size: 1.2rem;
+        letter-spacing: 1px;
+        color: #fff;
+      }
+      .brand-title span {
+        color: var(--accent-orange);
+      }
+      .header-badges {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .client-badge {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border-color);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+      }
+      .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid var(--status-online);
+        color: var(--status-online);
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .status-badge.offline {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: var(--status-offline);
+        color: var(--status-offline);
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 8px currentColor;
+      }
+
+      /* LAYOUT CONTAINER */
+      .main-container {
+        flex: 1;
+        padding: 16px;
+        max-width: 1100px;
+        margin: 0 auto;
+        width: 100%;
+        padding-bottom: 80px;
+      }
+
+      /* VIEWS MANAGEMENT */
+      .view-section {
+        display: none;
+        animation: fadeIn 0.25s ease-in-out;
+      }
+      .view-section.active {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* NAVIGATION BAR (BOTTOM) */
+      .bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-surface);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-around;
+        padding: 8px 0;
+        z-index: 100;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+      }
+      .nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: none;
+        border: none;
+        cursor: pointer;
+        width: 20%;
+        transition: color 0.2s;
+      }
+      .nav-item svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+      }
+      .nav-item.active {
+        color: var(--accent-orange);
+      }
+      .nav-item.scan-btn {
+        color: #fff;
+        margin-top: -16px;
+      }
+      .scan-btn-inner {
+        background: linear-gradient(
+          135deg,
+          var(--accent-orange-light),
+          var(--accent-orange)
+        );
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 15px var(--accent-orange-glow);
+      }
+
+      /* CARDS & COMPONENTS */
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      .card-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-title svg {
+        fill: var(--accent-orange);
+        width: 20px;
+        height: 20px;
+      }
+
+      /* BUTTONS */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        width: 100%;
+        text-align: center;
+      }
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          var(--accent-orange-light),
+          var(--accent-orange)
+        );
+        color: #fff;
+        box-shadow: 0 4px 12px var(--accent-orange-glow);
+      }
+      .btn-primary:active {
+        transform: scale(0.98);
+      }
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+      }
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      /* ASSET BANNER */
+      .asset-header-card {
+        background: linear-gradient(180deg, #22293a 0%, var(--bg-card) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 16px;
+      }
+      .asset-header-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--accent-orange);
+      }
+      .asset-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .asset-name {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #fff;
+      }
+      .asset-id {
+        font-size: 0.85rem;
+        color: var(--accent-orange);
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .asset-badge {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--status-online);
+        border: 1px solid var(--status-online);
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+      .asset-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 14px;
+      }
+      @media (min-width: 600px) {
+        .asset-metrics {
+          grid-template-columns: repeat(4, 1fr);
+        }
+      }
+      .metric-box {
+        background: rgba(0, 0, 0, 0.25);
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .metric-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+      .metric-value {
+        font-size: 0.95rem;
+        color: #fff;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+
+      /* MODULES GRID (8 BUTTONS) */
+      .modules-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      @media (min-width: 600px) {
+        .modules-grid {
+          grid-template-columns: repeat(4, 1fr);
+        }
+      }
+      .module-btn {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: var(--text-main);
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+      }
+      .module-btn:hover,
+      .module-btn:active {
+        border-color: var(--accent-orange);
+        background: var(--bg-card-hover);
+        transform: translateY(-2px);
+      }
+      .module-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px;
+        background: rgba(255, 85, 0, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-orange);
+      }
+      .module-icon svg {
+        width: 24px;
+        height: 24px;
+        fill: currentColor;
+      }
+      .module-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      /* SCANNER MODAL & UI */
+      .scanner-box {
+        text-align: center;
+        padding: 30px 20px;
+        border: 2px dashed var(--accent-orange);
+        border-radius: 16px;
+        background: rgba(255, 85, 0, 0.03);
+        margin-bottom: 20px;
+        position: relative;
+      }
+      .tag-graphic {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 16px;
+        background: #2a3042;
+        border: 2px solid #55607a;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+      .tag-graphic::before {
+        content: "";
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 2px solid var(--accent-orange);
+        animation: pulse 1.8s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          transform: scale(0.8);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.4);
+          opacity: 0;
+        }
+      }
+
+      /* CHATBOT / VIRTUAL ASSISTANT */
+      .chat-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 450px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .chat-msg {
+        display: flex;
+        gap: 10px;
+        max-width: 88%;
+      }
+      .chat-msg.user {
+        align-self: flex-end;
+        flex-direction: row-reverse;
+      }
+      .chat-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--accent-orange);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.8rem;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .chat-bubble {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        padding: 12px 14px;
+        border-radius: 12px;
+        font-size: 0.88rem;
+        line-height: 1.4;
+      }
+      .chat-msg.user .chat-bubble {
+        background: var(--accent-orange);
+        border-color: var(--accent-orange);
+        color: #fff;
+      }
+      .options-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .option-chip {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border-color);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-main);
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.2s;
+      }
+      .option-chip:hover {
+        border-color: var(--accent-orange);
+        background: rgba(255, 85, 0, 0.15);
+      }
+
+      /* CHECKLIST LIST */
+      .check-list {
+        list-style: none;
+        margin: 10px 0;
+      }
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 0.85rem;
+      }
+      .check-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent-orange);
+      }
+
+      /* SIGNATURE CANVAS */
+      .signature-pad {
+        background: #fff;
+        border-radius: 8px;
+        width: 100%;
+        height: 120px;
+        touch-action: none;
+        cursor: crosshair;
+      }
+
+      /* PRINT / REPORT SPECIFIC STYLES */
+      @media print {
+        body {
+          background: #fff !important;
+          color: #000 !important;
+        }
+        .app-header,
+        .bottom-nav,
+        .no-print {
+          display: none !important;
+        }
+        .main-container {
+          padding: 0 !important;
+          margin: 0 !important;
+          max-width: 100% !important;
+        }
+        .print-report {
+          display: block !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: #fff !important;
+          color: #000 !important;
+        }
+        .print-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 15px 0;
+        }
+        .print-table th,
+        .print-table td {
+          border: 1px solid #cbd5e1;
+          padding: 8px;
+          text-align: left;
+          font-size: 12px;
+          color: #000;
+        }
+        .print-table th {
+          background: #f1f5f9;
+          font-weight: bold;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TOP APP HEADER -->
+    <header class="app-header">
+      <div class="brand-logo" onclick="switchView('inicio')">
+        <!-- TagSense Symbol Logo -->
+        <svg viewBox="0 0 100 100">
+          <path
+            fill="#FF5500"
+            d="M15,20 L45,20 L45,75 C45,82 38,88 30,88 L25,88 L25,72 L28,72 C31,72 33,70 33,67 L33,35 L15,35 Z"
+          />
+          <path
+            fill="#FF5500"
+            d="M85,20 L55,20 L55,75 C55,82 62,88 70,88 L75,88 L75,72 L72,72 C69,72 67,70 67,67 L67,35 L85,35 Z"
+          />
+          <path fill="#FF5500" d="M22,42 L40,42 L32,60 Z" />
+          <path fill="#FF5500" d="M78,42 L60,42 L68,60 Z" />
+        </svg>
+        <div class="brand-title">TAG<span>SENSE</span></div>
+      </div>
+      <div class="header-badges">
+        <div class="client-badge">PUCOBRE</div>
+        <div
+          class="status-badge"
+          id="network-status"
+          onclick="toggleOnlineStatus()"
+        >
+          <div class="status-dot"></div>
+          <span id="network-text">ONLINE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN APP CONTENT AREA -->
+    <main class="main-container">
+      <!-- VIEW 1: INICIO / DASHBOARD -->
+      <section id="view-inicio" class="view-section active">
+        <div
+          class="card"
+          style="
+            background: linear-gradient(
+              135deg,
+              rgba(255, 85, 0, 0.15),
+              rgba(19, 23, 34, 0.9)
+            );
+            border-color: var(--accent-orange);
+          "
+        >
+          <h2 style="font-size: 1.2rem; margin-bottom: 6px; color: #fff">
+            Plataforma Inteligente de Activos
+          </h2>
+          <p
+            style="
+              font-size: 0.85rem;
+              color: var(--text-muted);
+              margin-bottom: 14px;
+            "
+          >
+            Información técnica centralizada, diagnósticos asistidos y
+            trazabilidad total.
+          </p>
+          <button class="btn btn-primary" onclick="switchView('scan')">
+            <svg
+              style="width: 20px; height: 20px; fill: currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-4h2v2h-2v-2z"
+              />
+            </svg>
+            SENSAR TAG CÓDIGO ACTIVO
+          </button>
+        </div>
+
+        <div class="card-title">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"
+            />
+          </svg>
+          ACTIVOS DESTACADOS (MINA PUCOBRE)
+        </div>
+
+        <!-- ASSET ITEM 1 -->
+        <div
+          class="card"
+          style="cursor: pointer"
+          onclick="selectAsset('MT65S')"
+        >
+          <div
+            style="
+              display: flex;
+              justify-shadow: space-between;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #fff">
+                Camión Minero MT65S
+              </div>
+              <div
+                style="
+                  font-size: 0.8rem;
+                  color: var(--accent-orange);
+                  font-weight: 700;
+                "
+              >
+                ID: TS-CAEX-000125
+              </div>
+            </div>
+            <span class="asset-badge">OPERATIVO</span>
+          </div>
+          <div
+            style="
+              margin-top: 10px;
+              font-size: 0.8rem;
+              color: var(--text-muted);
+              display: flex;
+              gap: 15px;
+            "
+          >
+            <span>📍 Mina Norte/Pala 01</span>
+            <span>⏱️ 12.458 Hrs</span>
+          </div>
+        </div>
+
+        <!-- ASSET ITEM 2 -->
+        <div
+          class="card"
+          style="cursor: pointer"
+          onclick="selectAsset('SCOOP')"
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: #fff">
+                Scooptram LHD (ST14)
+              </div>
+              <div
+                style="
+                  font-size: 0.8rem;
+                  color: var(--accent-orange);
+                  font-weight: 700;
+                "
+              >
+                ID: TS-LHD-000084
+              </div>
+            </div>
+            <span
+              class="asset-badge"
+              style="
+                background: rgba(245, 158, 11, 0.15);
+                border-color: var(--status-offline);
+                color: var(--status-offline);
+              "
+              >EN MANTENCIÓN</span
+            >
+          </div>
+          <div
+            style="
+              margin-top: 10px;
+              font-size: 0.8rem;
+              color: var(--text-muted);
+              display: flex;
+              gap: 15px;
+            "
+          >
+            <span>📍 Nivel 380 - Taller</span>
+            <span>⏱️ 8.920 Hrs</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: SCANNER (NFC / QR SIMULATOR) -->
+      <section id="view-scan" class="view-section">
+        <div class="card">
+          <div class="card-title">MODO LECTURA TAGSENSE</div>
+          <p
+            style="
+              font-size: 0.85rem;
+              color: var(--text-muted);
+              margin-bottom: 16px;
+              text-align: center;
+            "
+          >
+            Acerca el dispositivo al Sensor TagSense (NFC) o escanea el código
+            QR impreso en la placa de acero inoxidable.
+          </p>
+
+          <div class="scanner-box">
+            <div class="tag-graphic">
+              <svg
+                style="width: 40px; height: 40px; fill: var(--accent-orange)"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM8 10h8v2H8zm0 4h5v2H8z"
+                />
+              </svg>
+              <span
+                style="
+                  font-size: 0.65rem;
+                  color: var(--text-muted);
+                  margin-top: 8px;
+                  font-weight: 700;
+                "
+                >NFC • LoRa • GPS</span
+              >
+            </div>
+
+            <div
+              id="scan-status-text"
+              style="
+                font-size: 0.95rem;
+                font-weight: 700;
+                color: #fff;
+                margin-bottom: 14px;
+              "
+            >
+              SENSANDO CÓDIGO TAGSENSE...
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted)">
+              Acerca tu smartphone al tag o pulsa el botón inferior.
+            </div>
+          </div>
+
+          <button
+            class="btn btn-primary"
+            onclick="simulateTagScan('TS-CAEX-000125')"
+          >
+            ⚡ SIMULAR LECTURA: TAG TS-CAEX-000125
+          </button>
+          <button
+            class="btn btn-secondary"
+            style="margin-top: 10px"
+            onclick="startRealNFCScan()"
+          >
+            📡 ACTIVAR LECTOR NFC REAL (ANDROID)
+          </button>
+        </div>
+      </section>
+
+      <!-- VIEW 3: ACTIVO DETALLE (MT65S) -->
+      <section id="view-activo" class="view-section">
+        <div class="asset-header-card">
+          <div class="asset-title-row">
+            <div>
+              <div class="asset-name" id="asset-det-title">
+                Camión Minero MT65S
+              </div>
+              <div class="asset-id" id="asset-det-id">ID: TS-CAEX-000125</div>
+            </div>
+            <span class="asset-badge">OPERATIVO</span>
+          </div>
+
+          <div class="asset-metrics">
+            <div class="metric-box">
+              <div class="metric-label">UBICACIÓN</div>
+              <div class="metric-value">Mina Norte/Pala 01</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">HORÓMETRO</div>
+              <div class="metric-value">12.458 Hrs</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">N° DE SERIE</div>
+              <div class="metric-value">MT65S-00125</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">ÚLT. INTERVENCIÓN</div>
+              <div class="metric-value">15/05/2026</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8 FUNCIONALIDADES DE TAGSENSE EN GRID -->
+        <div class="modules-grid">
+          <div class="module-btn" onclick="openModule('info')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Información General</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('docs')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Documentos (Manuales)</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('historial')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Historial Actividades</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('fotos')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Fotografías</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('repuestos')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Repuestos</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('inspecciones')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Inspecciones / Checklists</div>
+          </div>
+
+          <div class="module-btn" onclick="openModule('mantenedores')">
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                />
+              </svg>
+            </div>
+            <div class="module-title">Mantenedores</div>
+          </div>
+
+          <div
+            class="module-btn"
+            style="
+              border-color: var(--accent-orange);
+              background: rgba(255, 85, 0, 0.08);
+            "
+            onclick="switchView('asistente')"
+          >
+            <div class="module-icon">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"
+                />
+              </svg>
+            </div>
+            <div class="module-title" style="color: var(--accent-orange)">
+              Asistente IA
+            </div>
+          </div>
+        </div>
+
+        <!-- MODAL / DISPLAY CONTAINER FOR MODULE CONTENT -->
+        <div id="module-content-display" class="card" style="display: none">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+            "
+          >
+            <h3 id="module-display-title" class="card-title" style="margin: 0">
+              Título del Módulo
+            </h3>
+            <button
+              style="
+                background: none;
+                border: none;
+                color: var(--text-muted);
+                font-size: 1.2rem;
+                cursor: pointer;
+              "
+              onclick="
+                document.getElementById(
+                  'module-content-display',
+                ).style.display = 'none'
+              "
+            >
+              ✕
+            </button>
+          </div>
+          <div
+            id="module-display-body"
+            style="font-size: 0.88rem; color: var(--text-muted)"
+          >
+            Contenido cargado dinámicamente...
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: ASISTENTE TÉCNICO VIRTUAL (AI DIAGNOSTIC FLOW) -->
+      <section id="view-asistente" class="view-section">
+        <div class="card" style="border-color: var(--accent-orange)">
+          <div class="card-title" style="justify-content: space-between">
+            <span>🤖 ASISTENTE TÉCNICO VIRTUAL</span>
+            <span
+              style="
+                font-size: 0.7rem;
+                background: var(--accent-orange);
+                color: #fff;
+                padding: 2px 6px;
+                border-radius: 4px;
+              "
+              >PUCOBRE OEM</span
+            >
+          </div>
+          <p
+            style="
+              font-size: 0.8rem;
+              color: var(--text-muted);
+              margin-bottom: 12px;
+            "
+          >
+            Guía paso a paso para diagnóstico y validación técnica en terreno.
+          </p>
+
+          <div class="chat-container" id="chat-box">
+            <!-- CHAT MESSAGE 1 -->
+            <div class="chat-msg">
+              <div class="chat-avatar">IA</div>
+              <div class="chat-bubble">
+                Hola <strong>Juan Pérez</strong>. He identificado el activo
+                <strong>Camión Minero MT65S (TS-CAEX-000125)</strong
+                >.<br /><br />
+                ¿En qué sistema identificas la falla o anomalía?
+                <div class="options-grid" id="step-1-options">
+                  <div
+                    class="option-chip"
+                    onclick="handleAssistantStep(1, 'Levante Tolva')"
+                  >
+                    Levante Tolva
+                  </div>
+                  <div
+                    class="option-chip"
+                    onclick="handleAssistantStep(1, 'Dirección')"
+                  >
+                    Dirección
+                  </div>
+                  <div
+                    class="option-chip"
+                    onclick="handleAssistantStep(1, 'Frenos')"
+                  >
+                    Frenos
+                  </div>
+                  <div
+                    class="option-chip"
+                    onclick="handleAssistantStep(1, 'Otro')"
+                  >
+                    Otro
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: INFORME TÉCNICO AUTOMÁTICO & PDF PREVIEW -->
+      <section id="view-reporte" class="view-section">
+        <div class="card no-print">
+          <div class="card-title">INFORME TÉCNICO GENERADO AUTOMÁTICAMENTE</div>
+          <p
+            style="
+              font-size: 0.85rem;
+              color: var(--text-muted);
+              margin-bottom: 14px;
+            "
+          >
+            El informe contiene el diagnóstico validado por el mantenedor,
+            repuestos y evidencias.
+          </p>
+          <div style="display: flex; gap: 10px">
+            <button class="btn btn-primary" onclick="window.print()">
+              🖨️ IMPRIMIR / GUARDAR PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- PRINTABLE REPORT SHEET -->
+        <div
+          class="card print-report"
+          style="
+            background: #fff;
+            color: #1e293b;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+          "
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #e2e8f0;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            "
+          >
+            <div>
+              <h1 style="font-size: 1.4rem; color: #0f172a; font-weight: 800">
+                INFORME TÉCNICO DE INTERVENCIÓN
+              </h1>
+              <div style="font-size: 0.8rem; color: #64748b; font-weight: 700">
+                PLATAFORMA TAGSENSE - PUCOBRE
+              </div>
+            </div>
+            <div style="text-align: right">
+              <div style="font-size: 0.85rem; font-weight: 800; color: #ff5500">
+                PUCOBRE
+              </div>
+              <div
+                style="font-size: 0.75rem; color: #64748b"
+                id="report-date-str"
+              >
+                26-08-2026 17:30
+              </div>
+            </div>
+          </div>
+
+          <table class="print-table">
+            <tr>
+              <th>ACTIVO</th>
+              <td>MT65S - Camión Minero</td>
+              <th>CÓDIGO ACTIVO</th>
+              <td>TS-CAEX-000125</td>
+            </tr>
+            <tr>
+              <th>HORAS ACTIVO</th>
+              <td>12.458 h</td>
+              <th>UBICACIÓN</th>
+              <td>Mina - Pucobre (Norte)</td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 16px">
+            <h3
+              style="
+                font-size: 0.95rem;
+                color: #0f172a;
+                border-bottom: 1px solid #cbd5e1;
+                padding-bottom: 4px;
+                margin-bottom: 8px;
+              "
+            >
+              RESUMEN DE LA INTERVENCIÓN
+            </h3>
+            <table class="print-table">
+              <tr>
+                <th style="width: 25%">Diagnóstico</th>
+                <td id="report-diag-text">
+                  Fuga en flexible hidráulico (Sistema Levante Tolva)
+                </td>
+              </tr>
+              <tr>
+                <th>Trabajo realizado</th>
+                <td>
+                  Se inspecciona línea hidráulica de levante, detectando fuga
+                  por abrasión. Se realiza cambio de flexible hidráulico 1" x
+                  1200 mm y ajuste con torque especificado por OEM.
+                </td>
+              </tr>
+              <tr>
+                <th>Repuestos utilizados</th>
+                <td>
+                  • Flexible hidráulico 1" x 1200 mm<br />• Abrazadera de
+                  sujeción de alta presión
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 16px">
+            <h3
+              style="
+                font-size: 0.95rem;
+                color: #0f172a;
+                border-bottom: 1px solid #cbd5e1;
+                padding-bottom: 4px;
+                margin-bottom: 8px;
+              "
+            >
+              EVIDENCIAS FOTOGRÁFICAS
+            </h3>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                margin-top: 8px;
+              "
+            >
+              <div
+                style="
+                  background: #f1f5f9;
+                  border: 1px solid #cbd5e1;
+                  height: 90px;
+                  border-radius: 4px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: #64748b;
+                  font-size: 0.75rem;
+                "
+              >
+                📷 Inspección Fuga Flexible
+              </div>
+              <div
+                style="
+                  background: #f1f5f9;
+                  border: 1px solid #cbd5e1;
+                  height: 90px;
+                  border-radius: 4px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: #64748b;
+                  font-size: 0.75rem;
+                "
+              >
+                📷 Componente Reemplazado
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              margin-top: 24px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+            "
+          >
+            <div>
+              <div
+                style="font-size: 0.85rem; font-weight: bold; color: #0f172a"
+              >
+                TÉCNICO RESPONSABLE:
+              </div>
+              <div style="font-size: 0.85rem; color: #334155">
+                Juan Pérez (Mantenedor Especialista)
+              </div>
+            </div>
+            <div style="text-align: center">
+              <canvas
+                id="signature-pad"
+                class="signature-pad"
+                style="border: 1px dashed #cbd5e1; width: 180px; height: 60px"
+              ></canvas>
+              <div style="font-size: 0.7rem; color: #64748b; margin-top: 2px">
+                FIRMA DIGITAL REGISTRADA
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              margin-top: 20px;
+              text-align: center;
+              font-size: 0.7rem;
+              color: #94a3b8;
+              border-top: 1px solid #e2e8f0;
+              padding-top: 8px;
+            "
+          >
+            Informe generado automáticamente por TagSense Platform • Traza de
+            seguridad ID: TS-RPT-202688412
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- BOTTOM NAVIGATION BAR -->
+    <nav class="bottom-nav">
+      <button
+        class="nav-item active"
+        id="nav-inicio"
+        onclick="switchView('inicio')"
+      >
+        <svg viewBox="0 0 24 24">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+        </svg>
+        Inicio
+      </button>
+      <button class="nav-item" id="nav-activo" onclick="switchView('activo')">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"
+          />
+        </svg>
+        Activo
+      </button>
+      <button
+        class="nav-item scan-btn"
+        id="nav-scan"
+        onclick="switchView('scan')"
+      >
+        <div class="scan-btn-inner">
+          <svg
+            viewBox="0 0 24 24"
+            style="width: 26px; height: 26px; fill: #fff"
+          >
+            <path
+              d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-4h2v2h-2v-2z"
+            />
+          </svg>
+        </div>
+        Scan
+      </button>
+      <button
+        class="nav-item"
+        id="nav-asistente"
+        onclick="switchView('asistente')"
+      >
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"
+          />
+        </svg>
+        Asistente
+      </button>
+      <button class="nav-item" id="nav-reporte" onclick="switchView('reporte')">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"
+          />
+        </svg>
+        Reportes
+      </button>
+    </nav>
+
+    <!-- PWA & APPLICATION JAVASCRIPT LOGIC -->
+    <script>
+      // GLOBAL STATE
+      const state = {
+        isOnline: true,
+        currentAsset: "MT65S",
+        activeView: "inicio",
+        diagnosticData: {
+          sistema: "",
+          componente: "",
+          checks: [],
+        },
+      };
+
+      // VIEW SWITCHER
+      function switchView(viewId) {
+        state.activeView = viewId;
+        document
+          .querySelectorAll(".view-section")
+          .forEach((el) => el.classList.remove("active"));
+        const targetView = document.getElementById(`view-${viewId}`);
+        if (targetView) targetView.classList.add("active");
+
+        document
+          .querySelectorAll(".nav-item")
+          .forEach((el) => el.classList.remove("active"));
+        const activeNav = document.getElementById(`nav-${viewId}`);
+        if (activeNav) activeNav.classList.add("active");
+
+        window.scrollTo(0, 0);
+      }
+
+      // ONLINE / OFFLINE TOGGLE SIMULATION
+      function toggleOnlineStatus() {
+        state.isOnline = !state.isOnline;
+        const statusBadge = document.getElementById("network-status");
+        const statusText = document.getElementById("network-text");
+
+        if (state.isOnline) {
+          statusBadge.classList.remove("offline");
+          statusText.innerText = "ONLINE";
+        } else {
+          statusBadge.classList.add("offline");
+          statusText.innerText = "OFFLINE (LOCAL)";
+        }
+      }
+
+      // SELECT ASSET
+      function selectAsset(assetKey) {
+        state.currentAsset = assetKey;
+        const title = document.getElementById("asset-det-title");
+        const id = document.getElementById("asset-det-id");
+
+        if (assetKey === "MT65S") {
+          title.innerText = "Camión Minero MT65S";
+          id.innerText = "ID: TS-CAEX-000125";
+        } else {
+          title.innerText = "Scooptram LHD (ST14)";
+          id.innerText = "ID: TS-LHD-000084";
+        }
+        switchView("activo");
+      }
+
+      // SIMULATE TAG SCANNING (NFC/QR)
+      function simulateTagScan(tagCode) {
+        const textEl = document.getElementById("scan-status-text");
+        textEl.innerText = "⏳ LEYENDO SENSOR TAGSENSE...";
+        textEl.style.color = "var(--accent-orange)";
+
+        setTimeout(() => {
+          textEl.innerText = "✅ CÓDIGO TAGSENSE VALIDADO";
+          textEl.style.color = "var(--status-online)";
+          setTimeout(() => {
+            selectAsset("MT65S");
+          }, 800);
+        }, 1200);
+      }
+
+      // REAL WEB NFC API SUPPORT
+      async function startRealNFCScan() {
+        if ("NDEFReader" in window) {
+          try {
+            const ndef = new NDEFReader();
+            await ndef.scan();
+            document.getElementById("scan-status-text").innerText =
+              "📡 NDEV ACTIVO: ACERCA EL TAG AL TELÉFONO";
+            ndef.addEventListener("reading", ({ message, serialNumber }) => {
+              alert(`Tag detectado! Serie: ${serialNumber}`);
+              selectAsset("MT65S");
+            });
+          } catch (error) {
+            alert("Error al iniciar NFC: " + error);
+          }
+        } else {
+          alert(
+            "Web NFC no está soportado en este navegador/dispositivo. Utiliza la simulación táctil.",
+          );
+        }
+      }
+
+      // MODULE DETAILS DISPLAY
+      function openModule(moduleKey) {
+        const container = document.getElementById("module-content-display");
+        const title = document.getElementById("module-display-title");
+        const body = document.getElementById("module-display-body");
+
+        container.style.display = "block";
+
+        const moduleData = {
+          info: {
+            title: "Información General & Especificaciones",
+            html: `
+            <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Fabricante / Modelo:</td><td style="color:#FFF; font-weight:bold;">Epiroc MT65S</td></tr>
+              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Capacidad de Carga:</td><td style="color:#FFF; font-weight:bold;">65.000 kg (65 Ton)</td></tr>
+              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Presión Sistema Hidráulico:</td><td style="color:#FFF; font-weight:bold;">250 Bar (3625 PSI)</td></tr>
+              <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:6px 0; color:var(--text-muted);">Torque Pernos Rueda:</td><td style="color:#FFF; font-weight:bold;">750 Nm</td></tr>
+            </table>
+          `,
+          },
+          docs: {
+            title: "Manuales y Documentos OEM",
+            html: `
+            <ul style="list-style:none; line-height:2;">
+              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Manual de Servicio - Sistema Hidráulico MT65S.pdf</a></li>
+              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Esquema Eléctrico y Diagrama de Bloques v3.2.pdf</a></li>
+              <li>📄 <a href="#" style="color:var(--accent-orange); text-decoration:none;">Pauta de Mantenimiento Preventivo 500 Hrs.pdf</a></li>
+            </ul>
+          `,
+          },
+          historial: {
+            title: "Historial de Intervenciones",
+            html: `
+            <div style="border-left:2px solid var(--accent-orange); padding-left:10px; font-size:0.8rem;">
+              <div style="color:#FFF; font-weight:bold;">15/05/2026 - Cambio de Filtros de Retorno</div>
+              <div style="color:var(--text-muted);">Técnico: Carlos Mendoza • Duración: 2.5 hrs</div>
+              <br>
+              <div style="color:#FFF; font-weight:bold;">02/04/2026 - Inspección Preventiva 12.000 Hrs</div>
+              <div style="color:var(--text-muted);">Técnico: Juan Pérez • Sin novedades críticas</div>
+            </div>
+          `,
+          },
+          fotos: {
+            title: "Registro Fotográfico del Activo",
+            html: `
+            <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;">
+              <div style="background:#000; height:80px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#666;">Vista Frontal</div>
+              <div style="background:#000; height:80px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#666;">Cilindro Tolva</div>
+            </div>
+          `,
+          },
+          repuestos: {
+            title: "Catálogo de Repuestos Frecuentes",
+            html: `
+            <ul style="list-style:none; font-size:0.85rem; line-height:1.8;">
+              <li>• Flexible Hidráulico 1" x 1200mm (P/N: EP-9821-A)</li>
+              <li>• Elemento Filtrante Aceite (P/N: EP-3312-F)</li>
+              <li>• Kit Sellos Cilindro Levante (P/N: EP-7700-K)</li>
+            </ul>
+          `,
+          },
+          inspecciones: {
+            title: "Checklists Pre-Uso / Pautas",
+            html: `
+            <div style="font-size:0.85rem;">
+              <label><input type="checkbox" checked> Nivel de Aceite Hidráulico OK</label><br>
+              <label><input type="checkbox" checked> Estado de Neumáticos y Torque OK</label><br>
+              <label><input type="checkbox" checked> Sistema de Extinción Fuego Cargado</label>
+            </div>
+          `,
+          },
+          mantenedores: {
+            title: "Mantenedores Asignados",
+            html: `
+            <div style="font-size:0.85rem;">
+              👤 <strong>Juan Pérez</strong> (Especialista Hidráulico)<br>
+              👤 <strong>Miguel Arancibia</strong> (Electromecánico Mina)
+            </div>
+          `,
+          },
+        };
+
+        if (moduleData[moduleKey]) {
+          title.innerText = moduleData[moduleKey].title;
+          body.innerHTML = moduleData[moduleKey].html;
+        }
+      }
+
+      // AI VIRTUAL ASSISTANT CHAT FLOW
+      function handleAssistantStep(step, value) {
+        const chatBox = document.getElementById("chat-box");
+
+        if (step === 1) {
+          state.diagnosticData.sistema = value;
+          chatBox.innerHTML += `
+          <div class="chat-msg user">
+            <div class="chat-avatar" style="background:#555;">JP</div>
+            <div class="chat-bubble">${value}</div>
+          </div>
+          <div class="chat-msg">
+            <div class="chat-avatar">IA</div>
+            <div class="chat-bubble">
+              Seleccione el componente específico con anomalía en el sistema de <strong>${value}</strong>:
+              <div class="options-grid">
+                <div class="option-chip" onclick="handleAssistantStep(2, 'Flexible hidráulico')">Flexible hidráulico</div>
+                <div class="option-chip" onclick="handleAssistantStep(2, 'Cilindro')">Cilindro</div>
+                <div class="option-chip" onclick="handleAssistantStep(2, 'Válvula')">Válvula</div>
+                <div class="option-chip" onclick="handleAssistantStep(2, 'Conexión')">Conexión</div>
+              </div>
+            </div>
+          </div>
+        `;
+        } else if (step === 2) {
+          state.diagnosticData.componente = value;
+          chatBox.innerHTML += `
+          <div class="chat-msg user">
+            <div class="chat-avatar" style="background:#555;">JP</div>
+            <div class="chat-bubble">${value}</div>
+          </div>
+          <div class="chat-msg">
+            <div class="chat-avatar">IA</div>
+            <div class="chat-bubble">
+              Pauta de validación OEM para <strong>${value}</strong>. Revise y valide los siguientes puntos en terreno:
+              <ul class="check-list">
+                <li class="check-item"><input type="checkbox" checked> Conexión superior sin fugas</li>
+                <li class="check-item"><input type="checkbox" checked> Conexión inferior sin deformación</li>
+                <li class="check-item"><input type="checkbox" checked> Ausencia de abrasión por roce</li>
+                <li class="check-item"><input type="checkbox" checked> Presión nominal dentro de rango (250 Bar)</li>
+                <li class="check-item"><input type="checkbox" checked> Torque de acople verificado</li>
+              </ul>
+              <button class="btn btn-primary" style="margin-top:10px;" onclick="generateReportFromAssistant()">
+                📄 GENERAR INFORME TÉCNICO DE INTERVENCIÓN
+              </button>
+            </div>
+          </div>
+        `;
+        }
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+
+      function generateReportFromAssistant() {
+        document.getElementById("report-diag-text").innerText =
+          `Fuga / Anomalía en ${state.diagnosticData.componente || "Flexible Hidráulico"} (${state.diagnosticData.sistema || "Sistema Levante Tolva"})`;
+        switchView("reporte");
+      }
+
+      // INITIALIZE DIGITAL SIGNATURE CANVAS
+      window.addEventListener("load", () => {
+        const canvas = document.getElementById("signature-pad");
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          let drawing = false;
+
+          function startDraw(e) {
+            drawing = true;
+            draw(e);
+          }
+          function endDraw() {
+            drawing = false;
+            ctx.beginPath();
+          }
+          function draw(e) {
+            if (!drawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = "#0F172A";
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+          }
+
+          canvas.addEventListener("mousedown", startDraw);
+          canvas.addEventListener("mouseup", endDraw);
+          canvas.addEventListener("mousemove", draw);
+          canvas.addEventListener("touchstart", startDraw);
+          canvas.addEventListener("touchend", endDraw);
+          canvas.addEventListener("touchmove", draw);
+        }
+      });
+
+      // PWA SERVICE WORKER REGISTRATION VIA BLOB
+      if ("serviceWorker" in navigator) {
+        const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response('Modo Offline Activo'))));
+      `;
+        const blob = new Blob([swCode], { type: "application/javascript" });
+        navigator.serviceWorker
+          .register(URL.createObjectURL(blob))
+          .catch(() => {});
+      }
+    </script>
+  </body>
+</html>
