@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { crearActivo } from "@/app/admin/assets/actions";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
+import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 
 export default async function NewAssetPage() {
   const appUser = await requireAdmin();
@@ -37,6 +38,17 @@ export default async function NewAssetPage() {
                 </svg>
                 <input name="tag_code" required placeholder="TS-CAEX-0000126" />
               </div>
+            </div>
+
+            <div className="field">
+              <label>Foto principal</label>
+              <FileDropzone
+                name="photo"
+                accept="image/*"
+                required={false}
+                label="Elegir foto del activo"
+                hint="Opcional — se usa en la ficha de la app de campo."
+              />
             </div>
 
             <div className="field">

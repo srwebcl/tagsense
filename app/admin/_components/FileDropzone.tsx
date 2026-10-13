@@ -2,7 +2,19 @@
 
 import { useState } from "react";
 
-export function FileDropzone({ name, accept }: { name: string; accept?: string }) {
+export function FileDropzone({
+  name,
+  accept,
+  required = true,
+  label = "Elegir archivo PDF",
+  hint = "Manual, ficha técnica, procedimiento, etc.",
+}: {
+  name: string;
+  accept?: string;
+  required?: boolean;
+  label?: string;
+  hint?: string;
+}) {
   const [fileName, setFileName] = useState<string | null>(null);
 
   return (
@@ -13,14 +25,14 @@ export function FileDropzone({ name, accept }: { name: string; accept?: string }
         </svg>
       </div>
       <div className="txt">
-        <strong>{fileName || "Elegir archivo PDF"}</strong>
-        <small>{fileName ? "Toca para cambiarlo" : "Manual, ficha técnica, procedimiento, etc."}</small>
+        <strong>{fileName || label}</strong>
+        <small>{fileName ? "Toca para cambiarlo" : hint}</small>
       </div>
       <input
         type="file"
         name={name}
         accept={accept}
-        required
+        required={required}
         onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
       />
     </div>

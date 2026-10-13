@@ -1,5 +1,6 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
+import { uploads } from "@/lib/storage";
 
 // Resuelve un activo por el código leído del tag (QR o NFC) — ver API_SPEC.md.
 // tenant_id nunca se recibe del cliente: se resuelve siempre desde la sesión
@@ -17,7 +18,7 @@ export async function GET(
 
   const result = await pool.query(
     `select id, tag_code, name, model, serial_number, status, location, hour_meter, last_intervention_at,
-            asset_type, manufacturer, manufacture_year, specs
+            asset_type, manufacturer, manufacture_year, specs, photo_url
      from assets
      where tenant_id = $1 and tag_code = $2
      limit 1`,
@@ -27,6 +28,10 @@ export async function GET(
   const asset = result.rows[0];
   if (!asset) {
     return Response.json({ error: { code: "not_found", message: "Activo no encontrado para este código." } }, { status: 404 });
+  }
+
+  if (asset.photo_url) {
+    asset.photo_url = await uploads.url(asset.photo_url, { expiresIn: 3600 });
   }
 
   return Response.json(asset);

@@ -1398,9 +1398,15 @@ let informeFolioCounter = 1;
 let ultimoHorometro = { 'TS-CAEX-0000125': '8.745 h' };
 let informeFotos = [];
 
+// Fecha ISO del informe en curso — 'informe-fecha' se muestra en formato es-CL
+// (DD-MM-YYYY) para el PDF/WhatsApp, que `new Date()` no puede re-parsear de
+// vuelta; se guarda aparte para armar fechas válidas al persistir en el backend.
+let informeFechaISO = null;
+
 document.getElementById('report-fab').addEventListener('click', () => {
   document.getElementById('informe-tecnico').textContent = welcomeName.textContent || 'usuario';
   const ahora = new Date();
+  informeFechaISO = ahora.toISOString().slice(0, 10);
   document.getElementById('informe-fecha').textContent = ahora.toLocaleDateString('es-CL', {
     day: '2-digit', month: '2-digit', year: 'numeric'
   });
@@ -1440,6 +1446,9 @@ document.getElementById('report-fab').addEventListener('click', () => {
 });
 document.getElementById('back-informe').addEventListener('click', () => goTo('step-confirm-3'));
 let previewOrigen = 'nuevo';
+// Evita duplicar el registro en el servidor si el técnico descarga el PDF
+// y además lo comparte (o presiona "Finalizar") para el mismo informe.
+let informeGuardado = false;
 document.getElementById('back-informe-preview').addEventListener('click', () => {
   goTo(previewOrigen === 'historial' ? 'step-historial' : 'step-informe');
 });
@@ -1791,6 +1800,7 @@ btnPreviewInforme.addEventListener('click', () => {
     equipoId: activoActualId,
     tecnico: document.getElementById('informe-tecnico').textContent,
     fecha: document.getElementById('informe-fecha').textContent,
+    fechaISO: informeFechaISO,
     horometro: informeHorometro.value.trim(),
     horaInicio: informeHoraInicio.value,
     horaTermino: informeHoraTermino.value,
@@ -1841,6 +1851,7 @@ btnPreviewInforme.addEventListener('click', () => {
   document.getElementById('report-preview-content').innerHTML = construirInformeHTML(data);
   document.querySelectorAll('.report-send-row').forEach(r => r.classList.remove('hidden'));
   previewOrigen = 'nuevo';
+  informeGuardado = false;
   goTo('step-informe-preview');
 });
 
@@ -2230,6 +2241,9 @@ async function guardarInformeEnBackend(data, pdfDoc){
   }
 
   try {
+    // 'fecha' viene en formato es-CL (DD-MM-YYYY) para mostrarse — no sirve para
+    // construir un Date, por eso se usa fechaISO (ver report-fab arriba).
+    const fechaBase = data.fechaISO || new Date().toISOString().slice(0, 10);
     const intervencionResp = await fetch('/api/interventions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2238,8 +2252,8 @@ async function guardarInformeEnBackend(data, pdfDoc){
         diagnosis: data.fallas || null,
         work_performed: data.descripcion || null,
         parts_used: { usados: data.repuestosUsados, detalle: data.repuestosDetalle || null },
-        started_at: data.horaInicio ? new Date(`${data.fecha}T${data.horaInicio}`).toISOString() : new Date().toISOString(),
-        finished_at: data.horaTermino ? new Date(`${data.fecha}T${data.horaTermino}`).toISOString() : null,
+        started_at: data.horaInicio ? new Date(`${fechaBase}T${data.horaInicio}`).toISOString() : new Date().toISOString(),
+        finished_at: data.horaTermino ? new Date(`${fechaBase}T${data.horaTermino}`).toISOString() : null,
         operational_after: data.operativo,
         details: {
           severidad: data.severidad,
@@ -2273,12 +2287,19 @@ async function guardarInformeEnBackend(data, pdfDoc){
   }
 }
 
+// Solo se persiste un informe nuevo (no uno reabierto del historial), y solo una vez
+// aunque el técnico use más de un botón de salida (descargar, WhatsApp, finalizar).
+function asegurarInformeGuardado(pdfDoc){
+  if (previewOrigen !== 'nuevo' || informeGuardado || !ultimoInformeData) return Promise.resolve();
+  informeGuardado = true;
+  return guardarInformeEnBackend(ultimoInformeData, pdfDoc);
+}
+
 document.getElementById('report-pdf-btn').addEventListener('click', (e) => {
   if (!ultimoInformeData) { e.preventDefault(); return; }
   const doc = generarInformePdf(ultimoInformeData);
   doc.save(`${ultimoInformeData.folio}_${ultimoInformeData.equipoId}.pdf`);
-  // Solo se persiste un informe nuevo — reabrir uno del historial no debe duplicarlo.
-  if (previewOrigen === 'nuevo') guardarInformeEnBackend(ultimoInformeData, doc);
+  asegurarInformeGuardado(doc);
   informeFolioCounter++;
   e.preventDefault();
 });
@@ -2328,6 +2349,9 @@ document.getElementById('btn-informe-whatsapp').addEventListener('click', async 
   // Abre el selector nativo del teléfono; ahí se elige WhatsApp y el PDF va adjunto de verdad.
   try {
     const pdfDoc = generarInformePdf(d);
+    // El informe queda registrado al compartir igual que al descargar — no depende
+    // de si el selector nativo de compartir realmente se completa o se cancela.
+    asegurarInformeGuardado(pdfDoc);
     const blob = pdfDoc.output('blob');
     const file = new File([blob], `${d.folio}_${d.equipoId}.pdf`, { type: 'application/pdf' });
 
@@ -2345,6 +2369,21 @@ document.getElementById('btn-informe-whatsapp').addEventListener('click', async 
 
   // Respaldo: el navegador no soporta compartir archivos — se envía solo el resumen en texto.
   enviarSoloTexto();
+});
+
+// Cierra el flujo: asegura que el informe quede guardado (por si el técnico no
+// descargó ni compartió desde esta pantalla) y vuelve a la ficha del equipo.
+document.getElementById('btn-informe-finalizar').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-informe-finalizar');
+  if (ultimoInformeData && previewOrigen === 'nuevo' && !informeGuardado) {
+    btn.disabled = true;
+    try {
+      await asegurarInformeGuardado(generarInformePdf(ultimoInformeData));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  goTo(previewOrigen === 'historial' ? 'step-historial' : 'step-confirm-3');
 });
 
 // ---- Historial real: se consulta /api/assets/:tag_code/interventions al entrar ----
@@ -2466,7 +2505,6 @@ async function cargarHistorial(){
 // lógica de "activo encontrado / no encontrado" en cada método de lectura
 // (ver /tagsense-docs/skills/nfc-qr-scanning/SKILL.md, checklist final).
 // Convierte la fila de la tabla `assets` (API real) al formato que ya usa la UI.
-// Sin columna de año de fabricación en el schema todavía — se deja en blanco, no se inventa.
 function mapearActivoDesdeApi(data){
   const estadoLabel = { operativo: 'Operativo', mantenimiento: 'Mantención', fuera_de_servicio: 'Detenido' };
   return {
@@ -2479,7 +2517,7 @@ function mapearActivoDesdeApi(data){
     tipo: data.asset_type || '',
     fabricante: data.manufacturer || '',
     modelo: data.model || '',
-    foto: null,
+    foto: data.photo_url || null,
   };
 }
 

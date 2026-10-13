@@ -41,8 +41,41 @@ export async function crearActivo(formData: FormData) {
       parseYear(formData.get("manufacture_year")),
     ]
   );
+  const assetId = result.rows[0].id;
 
-  redirect(`/admin/assets/${result.rows[0].id}`);
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    await guardarFotoActivo(appUser.tenant_id, assetId, photo);
+  }
+
+  redirect(`/admin/assets/${assetId}`);
+}
+
+async function guardarFotoActivo(tenantId: string, assetId: string, photo: File) {
+  const key = `asset-photos/${tenantId}/${assetId}/${randomUUID()}-${photo.name}`;
+  const bytes = new Uint8Array(await photo.arrayBuffer());
+  await uploads.upload(key, bytes, { contentType: photo.type || "image/jpeg" });
+  await pool.query(`update assets set photo_url = $1 where tenant_id = $2 and id = $3`, [key, tenantId, assetId]);
+}
+
+export async function subirFotoActivo(assetId: string, formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) {
+    throw new Error("Falta la foto.");
+  }
+
+  const assetResult = await pool.query(
+    `select id from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, assetId]
+  );
+  if (!assetResult.rows[0]) {
+    throw new Error("Activo no encontrado.");
+  }
+
+  await guardarFotoActivo(appUser.tenant_id, assetId, photo);
+  redirect(`/admin/assets/${assetId}`);
 }
 
 export async function eliminarActivo(assetId: string) {
@@ -56,11 +89,14 @@ export async function eliminarActivo(assetId: string) {
     throw new Error("Activo no encontrado.");
   }
 
-  // Borra los PDFs del bucket antes de la fila — si se hiciera al revés y
-  // fallara el borrado del bucket, quedaría un activo "fantasma" sin archivos.
-  const prefix = `documents/${appUser.tenant_id}/${assetId}/`;
-  const listed = await uploads.list({ prefix });
-  await Promise.all(listed.items.map((f) => uploads.delete(f.key)));
+  // Borra los archivos del bucket (documentos y foto) antes de la fila — si se
+  // hiciera al revés y fallara el borrado del bucket, quedaría un activo
+  // "fantasma" sin archivos.
+  const prefixes = [`documents/${appUser.tenant_id}/${assetId}/`, `asset-photos/${appUser.tenant_id}/${assetId}/`];
+  for (const prefix of prefixes) {
+    const listed = await uploads.list({ prefix });
+    await Promise.all(listed.items.map((f) => uploads.delete(f.key)));
+  }
 
   // interventions, asset_documents (y en cascada intervention_photos, reports,
   // document_chunks) se borran solos — ver "on delete cascade" en 0001_init_schema.sql.

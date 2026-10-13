@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { subirDocumento, reindexarDocumento, eliminarActivo } from "@/app/admin/assets/actions";
+import { subirDocumento, reindexarDocumento, eliminarActivo, subirFotoActivo } from "@/app/admin/assets/actions";
+import { uploads } from "@/lib/storage";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
@@ -40,7 +41,7 @@ export default async function AssetDetailPage({
 
   const assetResult = await pool.query(
     `select id, tag_code, name, model, serial_number, status, location, hour_meter,
-            asset_type, manufacturer, manufacture_year
+            asset_type, manufacturer, manufacture_year, photo_url
      from assets where tenant_id = $1 and id = $2 limit 1`,
     [appUser.tenant_id, id]
   );
@@ -66,6 +67,8 @@ export default async function AssetDetailPage({
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
+  const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
+  const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
 
   return (
     <>
@@ -79,19 +82,24 @@ export default async function AssetDetailPage({
         </Link>
 
         <div className="asset-head">
-          <div>
-            <h1>{asset.name}</h1>
-            <p className="meta">
-              <b>{asset.tag_code}</b>
-              {asset.asset_type ? ` · ${asset.asset_type}` : ""}
-              {asset.manufacturer ? ` · ${asset.manufacturer}` : ""}
-              {asset.model ? ` · ${asset.model}` : ""}
-              {asset.manufacture_year ? ` · ${asset.manufacture_year}` : ""}
-            </p>
-            <p className="meta">
-              {asset.serial_number ? `N° serie: ${asset.serial_number} · ` : ""}
-              {asset.location || "sin ubicación"}
-            </p>
+          <div className="asset-head-id">
+            {photoUrl ? (
+              <img src={photoUrl} alt={asset.name} className="asset-photo" />
+            ) : null}
+            <div>
+              <h1>{asset.name}</h1>
+              <p className="meta">
+                <b>{asset.tag_code}</b>
+                {asset.asset_type ? ` · ${asset.asset_type}` : ""}
+                {asset.manufacturer ? ` · ${asset.manufacturer}` : ""}
+                {asset.model ? ` · ${asset.model}` : ""}
+                {asset.manufacture_year ? ` · ${asset.manufacture_year}` : ""}
+              </p>
+              <p className="meta">
+                {asset.serial_number ? `N° serie: ${asset.serial_number} · ` : ""}
+                {asset.location || "sin ubicación"}
+              </p>
+            </div>
           </div>
           <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
             <span className="dot" />
@@ -168,6 +176,21 @@ export default async function AssetDetailPage({
           pueda buscarlos. Puede tardar unos segundos; si queda en &quot;Falló&quot;, probablemente el PDF es un
           escaneo sin texto real (necesitaría OCR, no soportado todavía).
         </p>
+
+        <div className="admin-panel">
+          <p className="section-label" style={{ marginBottom: 18 }}>{photoUrl ? "Cambiar foto" : "Foto principal"}</p>
+          <form action={subirFotoDeEsteActivo}>
+            <div className="field">
+              <FileDropzone
+                name="photo"
+                accept="image/*"
+                label={photoUrl ? "Elegir nueva foto" : "Elegir foto del activo"}
+                hint="Se muestra en la ficha de la app de campo."
+              />
+            </div>
+            <SubmitButton>{photoUrl ? "Reemplazar foto" : "Subir foto"}</SubmitButton>
+          </form>
+        </div>
 
         <div className="admin-panel">
           <p className="section-label" style={{ marginBottom: 18 }}>Subir documento</p>
