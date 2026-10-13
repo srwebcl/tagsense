@@ -34,34 +34,61 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 px-6">
-      <h1 className="text-xl font-bold">TAGSENSE — Administración</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded border px-3 py-2"
-          required
-        />
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded border px-3 py-2"
-          required
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-        >
-          {loading ? "Ingresando…" : "Ingresar"}
-        </button>
-      </form>
+    <div className="admin-login-wrap">
+      <div className="admin-login-card">
+        <div className="admin-login-brand">
+          <img src="/assets/img/logo-mark.png" alt="TAGSENSE" />
+          <h1>
+            TAG<b>SENSE</b>
+          </h1>
+          <p>Panel de administración</p>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label>Correo electrónico</label>
+            <div className={`input-wrap ${error ? "invalid" : ""}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6h18v12H3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M3 7l9 6 9-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <input
+                type="email"
+                placeholder="admin@tagsense.cl"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Contraseña</label>
+            <div className={`input-wrap ${error ? "invalid" : ""}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect x="5" y="11" width="14" height="9" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.6" />
+              </svg>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+          </div>
+
+          {error && <p className="form-error">{error}</p>}
+
+          <button type="submit" className="btn" disabled={loading}>
+            {loading ? <span className="btn-spin" /> : null}
+            {loading ? "Ingresando…" : "Ingresar"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

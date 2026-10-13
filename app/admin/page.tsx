@@ -1,6 +1,18 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
+import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
+
+const STATUS_LABEL: Record<string, string> = {
+  operativo: "Operativo",
+  mantenimiento: "Mantención",
+  fuera_de_servicio: "Fuera de servicio",
+};
+const STATUS_CLASS: Record<string, string> = {
+  operativo: "ok",
+  mantenimiento: "warn",
+  fuera_de_servicio: "err",
+};
 
 export default async function AdminHomePage() {
   const appUser = await requireAdmin();
@@ -14,33 +26,42 @@ export default async function AdminHomePage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Activos</h1>
-        <Link href="/admin/assets/new" className="rounded bg-black px-4 py-2 text-sm text-white">
-          + Nuevo activo
-        </Link>
-      </div>
+    <>
+      <AdminTopbar userName={appUser.full_name || appUser.email} />
+      <div className="admin-container">
+        <div className="admin-page-head">
+          <div>
+            <h1>Activos</h1>
+            <p className="sub">{result.rows.length} activo{result.rows.length === 1 ? "" : "s"} cargado{result.rows.length === 1 ? "" : "s"}</p>
+          </div>
+          <Link href="/admin/assets/new" className="btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+            Nuevo activo
+          </Link>
+        </div>
 
-      {result.rows.length === 0 ? (
-        <p className="text-sm text-gray-500">Todavía no hay activos cargados.</p>
-      ) : (
-        <ul className="divide-y rounded border">
-          {result.rows.map((asset) => (
-            <li key={asset.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <Link href={`/admin/assets/${asset.id}`} className="font-medium hover:underline">
-                  {asset.name}
-                </Link>
-                <p className="text-xs text-gray-500">
-                  {asset.tag_code} · {asset.model || "sin modelo"} · {asset.status}
+        {result.rows.length === 0 ? (
+          <div className="admin-empty">Todavía no hay activos cargados. Crea el primero para empezar.</div>
+        ) : (
+          <div className="asset-grid">
+            {result.rows.map((asset) => (
+              <Link key={asset.id} href={`/admin/assets/${asset.id}`} className="asset-grid-card">
+                <p className="name">{asset.name}</p>
+                <p className="tag">{asset.tag_code}</p>
+                <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
+                  <span className="dot" />
+                  {STATUS_LABEL[asset.status] || asset.status}
+                </span>
+                <p className="meta" style={{ marginTop: 10 }}>
+                  {asset.model || "Sin modelo"} · {asset.location || "Sin ubicación"}
                 </p>
-              </div>
-              <span className="text-xs text-gray-400">{asset.location}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
