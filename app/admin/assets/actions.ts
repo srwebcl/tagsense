@@ -2,9 +2,11 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
+import { indexDocument } from "@/lib/indexing";
 
 export async function crearActivo(formData: FormData) {
   const appUser = await requireAdmin();
@@ -56,11 +58,23 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   await uploads.upload(key, bytes, { contentType: file.type || "application/pdf" });
 
-  await pool.query(
+  const docResult = await pool.query(
     `insert into asset_documents (tenant_id, asset_id, title, document_type, file_url, uploaded_by)
-     values ($1, $2, $3, $4, $5, $6)`,
+     values ($1, $2, $3, $4, $5, $6)
+     returning id`,
     [appUser.tenant_id, assetId, title, documentType, key, appUser.id]
   );
 
+  // Indexado (extraer texto, generar embeddings) corre después de responder —
+  // subir un manual grande no debe bloquear la UI (ver skill rag-assistant).
+  const documentId = docResult.rows[0].id;
+  after(() => indexDocument(documentId));
+
+  redirect(`/admin/assets/${assetId}`);
+}
+
+export async function reindexarDocumento(assetId: string, documentId: string) {
+  await requireAdmin();
+  after(() => indexDocument(documentId));
   redirect(`/admin/assets/${assetId}`);
 }

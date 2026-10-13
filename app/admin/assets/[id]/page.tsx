@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { subirDocumento } from "@/app/admin/assets/actions";
+import { subirDocumento, reindexarDocumento } from "@/app/admin/assets/actions";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
@@ -21,6 +21,12 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   servicio: "Servicio",
   reparacion: "Reparación",
   partes: "Partes",
+};
+const INDEX_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pendiente", cls: "warn" },
+  processing: { label: "Indexando…", cls: "warn" },
+  indexed: { label: "Indexado", cls: "ok" },
+  failed: { label: "Falló", cls: "err" },
 };
 
 export default async function AssetDetailPage({
@@ -50,12 +56,13 @@ export default async function AssetDetailPage({
   }
 
   const docsResult = await pool.query(
-    `select id, title, document_type, created_at from asset_documents
+    `select id, title, document_type, created_at, index_status, index_error from asset_documents
      where tenant_id = $1 and asset_id = $2 order by created_at desc`,
     [appUser.tenant_id, id]
   );
 
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
+  const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
 
   return (
     <>
@@ -107,27 +114,48 @@ export default async function AssetDetailPage({
           </div>
         ) : (
           <div className="doc-list">
-            {docsResult.rows.map((doc) => (
-              <div key={doc.id} className="doc-row">
-                <div className="ic">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M7 3h7l5 5v13H7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                    <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                  </svg>
+            {docsResult.rows.map((doc) => {
+              const status = INDEX_STATUS[doc.index_status] || INDEX_STATUS.pending;
+              return (
+                <div key={doc.id} className="doc-row">
+                  <div className="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M7 3h7l5 5v13H7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                      <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="txt">
+                    <strong>{doc.title}</strong>
+                    <small>
+                      {new Date(doc.created_at).toLocaleDateString("es-CL")}
+                      {doc.index_status === "failed" && doc.index_error ? ` · ${doc.index_error}` : ""}
+                    </small>
+                  </div>
+                  <span className="badge">{DOC_TYPE_LABEL[doc.document_type] || doc.document_type}</span>
+                  <span className={`status-pill ${status.cls}`}>
+                    <span className="dot" />
+                    {status.label}
+                  </span>
+                  {doc.index_status !== "indexed" && doc.index_status !== "processing" && (
+                    <form action={reindexarDeEsteActivo.bind(null, doc.id)}>
+                      <button type="submit" className="doc-reindex-btn" title="Reintentar indexado">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </form>
+                  )}
                 </div>
-                <div className="txt">
-                  <strong>{doc.title}</strong>
-                  <small>{new Date(doc.created_at).toLocaleDateString("es-CL")}</small>
-                </div>
-                <span className="badge">{DOC_TYPE_LABEL[doc.document_type] || doc.document_type}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         <p className="index-note">
-          Los documentos quedan guardados y listos para indexar en el asistente IA apenas esté conectada la
-          integración con Anthropic/Voyage — hoy solo se almacenan, todavía no son buscables por el asistente.
+          Los documentos se indexan solos al subirlos (texto → embeddings con Voyage AI) para que el asistente
+          pueda buscarlos. Puede tardar unos segundos; si queda en &quot;Falló&quot;, probablemente el PDF es un
+          escaneo sin texto real (necesitaría OCR, no soportado todavía).
         </p>
 
         <div className="admin-panel">

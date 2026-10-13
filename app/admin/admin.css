@@ -193,6 +193,13 @@
   color:var(--text-mid); background:rgba(255,255,255,0.04); border:1px solid var(--graphite-line);
   padding:4px 9px; border-radius:8px; flex-shrink:0;
 }
+.doc-row{ flex-wrap:wrap; }
+.doc-reindex-btn{
+  width:30px; height:30px; border-radius:8px; flex-shrink:0;
+  background:var(--graphite); border:1px solid var(--graphite-line); color:var(--text-mid);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.doc-reindex-btn:hover{ color:var(--text-hi); border-color:var(--copper-2); }
 
 /* ===== Zona de subida de archivo ===== */
 .dropzone{
