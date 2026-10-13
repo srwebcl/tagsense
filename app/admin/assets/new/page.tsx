@@ -50,6 +50,40 @@ export default async function NewAssetPage() {
             </div>
 
             <div className="field">
+              <label>Tipo de activo</label>
+              <div className="input-wrap">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="7" width="18" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+                <input name="asset_type" list="asset-type-options" placeholder="Camión minero" />
+              </div>
+              <datalist id="asset-type-options">
+                <option value="Camión minero" />
+                <option value="Camión de apoyo" />
+                <option value="Excavadora" />
+                <option value="Cargador frontal" />
+                <option value="Perforadora" />
+                <option value="Planta de chancado" />
+                <option value="Grúa" />
+                <option value="Bomba" />
+                <option value="Compresor" />
+                <option value="Generador" />
+                <option value="Vehículo liviano" />
+                <option value="Equipo industrial" />
+                <option value="Maquinaria" />
+                <option value="Otro" />
+              </datalist>
+            </div>
+
+            <div className="field">
+              <label>Fabricante</label>
+              <div className="input-wrap">
+                <input name="manufacturer" placeholder="Epiroc" />
+              </div>
+            </div>
+
+            <div className="field">
               <label>Modelo</label>
               <div className="input-wrap">
                 <input name="model" placeholder="MT65S" />
@@ -60,6 +94,13 @@ export default async function NewAssetPage() {
               <label>N° de serie</label>
               <div className="input-wrap">
                 <input name="serial_number" placeholder="CAT0MT65SFKY100123" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Año de fabricación</label>
+              <div className="input-wrap">
+                <input name="manufacture_year" type="number" min="1950" max="2100" placeholder="2021" />
               </div>
             </div>
 

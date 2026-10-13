@@ -16,7 +16,8 @@ export async function GET(
   const { tag_code } = await params;
 
   const result = await pool.query(
-    `select id, tag_code, name, model, serial_number, status, location, hour_meter, last_intervention_at
+    `select id, tag_code, name, model, serial_number, status, location, hour_meter, last_intervention_at,
+            asset_type, manufacturer, manufacture_year, specs
      from assets
      where tenant_id = $1 and tag_code = $2
      limit 1`,

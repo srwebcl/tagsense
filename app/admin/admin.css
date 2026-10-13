@@ -121,6 +121,15 @@
   cursor:pointer; text-decoration:none;
 }
 .btn-outline:hover{ background:rgba(179,165,126,0.08); }
+.btn-danger{
+  display:inline-flex; align-items:center; gap:8px; width:auto;
+  height:42px; padding:0 18px; border-radius:12px;
+  background:transparent; border:1.5px solid rgba(201,18,51,0.4); color:var(--err);
+  font-size:12.5px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase;
+  cursor:pointer;
+}
+.btn-danger:hover{ background:rgba(201,18,51,0.1); border-color:var(--err); }
+.danger-zone{ margin-top:36px; padding-top:20px; border-top:1px solid var(--graphite-line); }
 .link-back{ display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text-mid); text-decoration:none; margin-bottom:18px; }
 .link-back:hover{ color:var(--text-hi); }
 

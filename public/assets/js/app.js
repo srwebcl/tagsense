@@ -12,6 +12,26 @@ const ACTIVOS = {};
 
 let activoActualId = null;
 
+// Muestra/oculta una fila de la ficha según si hay dato — evita filas vacías
+// tipo "Tipo de activo: —" para equipos a los que no se les cargó ese campo.
+function setFilaOpcional(rowId, valId, val){
+  const row = document.getElementById(rowId);
+  const valEl = document.getElementById(valId);
+  if (!row || !valEl) return;
+  if (val) {
+    valEl.textContent = val;
+    row.classList.remove('hidden');
+  } else {
+    row.classList.add('hidden');
+  }
+}
+
+function claseEstado(estado){
+  if (estado === 'Detenido') return 'stopped';
+  if (estado === 'Mantención') return 'maintenance';
+  return '';
+}
+
 function aplicarActivo(id){
   const a = ACTIVOS[id];
   if (!a) return;
@@ -27,8 +47,18 @@ function aplicarActivo(id){
   setText('c2-serie', a.serie);
   setText('c2-anio', a.anio);
   setText('c2-horometro', (typeof ultimoHorometro !== 'undefined' && ultimoHorometro[id]) || a.horometro);
-  setText('c2-ubicacion', a.ubicacion);
   setText('c2-status-text', a.estado);
+  setFilaOpcional('c2-tipo-row', 'c2-tipo', a.tipo);
+  setFilaOpcional('c2-fabricante-row', 'c2-fabricante', a.fabricante);
+  setFilaOpcional('c2-modelo-row', 'c2-modelo', a.modelo);
+  setFilaOpcional('c2-ubicacion-row', 'c2-ubicacion', a.ubicacion);
+
+  const pill = document.getElementById('c2-status-pill');
+  if (pill) {
+    pill.classList.remove('stopped', 'maintenance');
+    const cls = claseEstado(a.estado);
+    if (cls) pill.classList.add(cls);
+  }
 
   setText('c3-nombre', a.nombre);
   setText('c3-id', 'ID: ' + id);
@@ -37,8 +67,8 @@ function aplicarActivo(id){
   const banner = document.getElementById('ficha-status-banner');
   if (banner) {
     banner.classList.remove('stopped', 'maintenance');
-    if (a.estado === 'Detenido') banner.classList.add('stopped');
-    else if (a.estado === 'Mantención') banner.classList.add('maintenance');
+    const cls = claseEstado(a.estado);
+    if (cls) banner.classList.add(cls);
   }
 }
 
@@ -277,6 +307,11 @@ function iniciarAutoLecturaNFC(){
 // ---- Navegación ficha técnica ----
 document.getElementById('open-ficha-2').addEventListener('click', () => goTo('step-confirm-3'));
 document.getElementById('back-to-read').addEventListener('click', () => {
+  resetReadState();
+  goTo('step-read');
+  iniciarAutoLecturaNFC();
+});
+document.getElementById('back-to-read-2').addEventListener('click', () => {
   resetReadState();
   goTo('step-read');
   iniciarAutoLecturaNFC();
@@ -2437,10 +2472,13 @@ function mapearActivoDesdeApi(data){
   return {
     nombre: data.name,
     serie: data.serial_number || '—',
-    anio: '—',
+    anio: data.manufacture_year || '—',
     horometro: data.hour_meter != null ? `${data.hour_meter} h` : '—',
-    ubicacion: data.location || '—',
+    ubicacion: data.location || '',
     estado: estadoLabel[data.status] || data.status || '—',
+    tipo: data.asset_type || '',
+    fabricante: data.manufacturer || '',
+    modelo: data.model || '',
     foto: null,
   };
 }

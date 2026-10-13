@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { subirDocumento, reindexarDocumento } from "@/app/admin/assets/actions";
+import { subirDocumento, reindexarDocumento, eliminarActivo } from "@/app/admin/assets/actions";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
+import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
 
 const STATUS_LABEL: Record<string, string> = {
   operativo: "Operativo",
@@ -38,7 +39,8 @@ export default async function AssetDetailPage({
   const { id } = await params;
 
   const assetResult = await pool.query(
-    `select id, tag_code, name, model, serial_number, status, location, hour_meter
+    `select id, tag_code, name, model, serial_number, status, location, hour_meter,
+            asset_type, manufacturer, manufacture_year
      from assets where tenant_id = $1 and id = $2 limit 1`,
     [appUser.tenant_id, id]
   );
@@ -63,6 +65,7 @@ export default async function AssetDetailPage({
 
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
+  const eliminarEsteActivo = eliminarActivo.bind(null, id);
 
   return (
     <>
@@ -79,7 +82,15 @@ export default async function AssetDetailPage({
           <div>
             <h1>{asset.name}</h1>
             <p className="meta">
-              <b>{asset.tag_code}</b> · {asset.model || "sin modelo"} · {asset.location || "sin ubicación"}
+              <b>{asset.tag_code}</b>
+              {asset.asset_type ? ` · ${asset.asset_type}` : ""}
+              {asset.manufacturer ? ` · ${asset.manufacturer}` : ""}
+              {asset.model ? ` · ${asset.model}` : ""}
+              {asset.manufacture_year ? ` · ${asset.manufacture_year}` : ""}
+            </p>
+            <p className="meta">
+              {asset.serial_number ? `N° serie: ${asset.serial_number} · ` : ""}
+              {asset.location || "sin ubicación"}
             </p>
           </div>
           <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
@@ -189,6 +200,11 @@ export default async function AssetDetailPage({
 
             <SubmitButton>Subir documento</SubmitButton>
           </form>
+        </div>
+
+        <div className="danger-zone">
+          <p className="section-label">Zona de riesgo</p>
+          <DeleteAssetButton assetName={asset.name} action={eliminarEsteActivo} />
         </div>
       </div>
     </>

@@ -18,7 +18,7 @@ export default async function AdminHomePage() {
   const appUser = await requireAdmin();
 
   const result = await pool.query(
-    `select id, tag_code, name, model, status, location
+    `select id, tag_code, name, model, status, location, asset_type
      from assets
      where tenant_id = $1
      order by name`,
@@ -49,7 +49,7 @@ export default async function AdminHomePage() {
             {result.rows.map((asset) => (
               <Link key={asset.id} href={`/admin/assets/${asset.id}`} className="asset-grid-card">
                 <p className="name">{asset.name}</p>
-                <p className="tag">{asset.tag_code}</p>
+                <p className="tag">{asset.tag_code}{asset.asset_type ? ` · ${asset.asset_type}` : ""}</p>
                 <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
                   <span className="dot" />
                   {STATUS_LABEL[asset.status] || asset.status}

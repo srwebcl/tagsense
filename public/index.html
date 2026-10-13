@@ -152,23 +152,33 @@
   <!-- PASO 5: INFORMACIÓN RESUMIDA -->
   <div class="stage step-fade hidden centered" id="step-confirm-2">
     <div class="asset-card" style="text-align:left;">
-      <div style="margin-bottom:14px;">
+      <div style="margin-bottom:14px; display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
         <div class="asset-name" style="margin:0;" id="c2-nombre">Camión Minero MT65S</div>
+        <span class="status-pill" id="c2-status-pill"><span class="dot"></span><span id="c2-status-text">Operativo</span></span>
       </div>
       <div class="asset-illustration mid-bleed">
         <img class="truck-photo" alt="Equipo" loading="lazy">
       </div>
       <div class="meta-table">
         <div class="trow"><span class="tk">ID del componente</span><span class="tv copper" id="c2-id">TS-CAEX-0000125</span></div>
+        <div class="trow hidden" id="c2-tipo-row"><span class="tk">Tipo de activo</span><span class="tv" id="c2-tipo"></span></div>
+        <div class="trow hidden" id="c2-fabricante-row"><span class="tk">Fabricante</span><span class="tv" id="c2-fabricante"></span></div>
+        <div class="trow hidden" id="c2-modelo-row"><span class="tk">Modelo</span><span class="tv" id="c2-modelo"></span></div>
         <div class="trow"><span class="tk">Serie / VIN</span><span class="tv" id="c2-serie">CAT0MT65SFKY100123</span></div>
         <div class="trow"><span class="tk">Año fabricación</span><span class="tv" id="c2-anio">2021</span></div>
         <div class="trow"><span class="tk">Horómetro última intervención</span><span class="tv" id="c2-horometro">8.745 h</span></div>
+        <div class="trow hidden" id="c2-ubicacion-row"><span class="tk">Ubicación</span><span class="tv" id="c2-ubicacion"></span></div>
       </div>
     </div>
 
     <button class="btn" id="open-ficha-2">
       Abrir ficha técnica
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="back-link" id="back-to-read-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      ¿Activo equivocado? Volver a escanear
     </button>
   </div>
 
@@ -186,6 +196,10 @@
         <strong id="c3-nombre">Camión Minero MT65S</strong>
         <div class="id" id="c3-id">ID: TS-CAEX-0000125</div>
       </div>
+    </div>
+    <div class="ficha-status-banner" id="ficha-status-banner">
+      <span class="dot"></span>
+      <span id="c3-status-text">Operativo</span>
     </div>
 
     <div class="qa-grid" style="margin-top:16px;">
