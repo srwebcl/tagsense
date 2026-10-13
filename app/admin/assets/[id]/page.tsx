@@ -81,6 +81,24 @@ export default async function AssetDetailPage({
           </span>
         </div>
 
+        <p className="section-label">Código QR del tag</p>
+        <div className="admin-panel qr-panel">
+          <img src={`/api/assets/${asset.tag_code}/qrcode`} alt={`QR de ${asset.tag_code}`} width={160} height={160} className="qr-preview" />
+          <div className="qr-panel-info">
+            <p className="qr-panel-code">{asset.tag_code}</p>
+            <p className="qr-panel-hint">
+              Se genera solo a partir del código del tag — imprímelo y pégalo en el equipo. Cualquier cámara lo
+              reconoce; si el celular no tiene la app, igual abre la ficha en el navegador.
+            </p>
+            <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Descargar QR
+            </a>
+          </div>
+        </div>
+
         <p className="section-label">Manuales y documentos</p>
 
         {docsResult.rows.length === 0 ? (
