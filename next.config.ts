@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   // archivo .mjs dentro del chunk de Turbopack (ver docs/troubleshooting.md
   // del paquete, sección Next.js/Vercel).
   serverExternalPackages: ["pdf-parse"],
+  // Default es 1MB — muy poco para una foto de celular o un manual PDF escaneado
+  // subidos como Server Action (crearActivo, subirFotoActivo, subirDocumento).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "15mb",
+    },
+  },
   async redirects() {
     return [
       {

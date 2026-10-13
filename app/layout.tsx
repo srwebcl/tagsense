@@ -23,7 +23,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* suppressHydrationWarning: algunas extensiones del navegador (ej. ColorZilla)
+          inyectan atributos como cz-shortcut-listen en <body> antes de que React
+          hidrate — no es un bug de la app, ver https://react.dev/link/hydration-mismatch */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
