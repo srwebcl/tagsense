@@ -202,15 +202,16 @@ accessBtn.addEventListener('click', async () => {
     welcomeName.textContent = nombre || 'usuario';
     sessionAuthenticated = true;
 
-    if (pendingActivoId) {
-      const idPendiente = pendingActivoId;
-      pendingActivoId = null;
-      goTo('step-read');
-      const resuelto = await resolverActivoEscaneado(idPendiente, { origen: 'nfc-url' });
-      if (!resuelto) mostrarHintLectura('No se pudo cargar el activo del tag. Intenta de nuevo o usa QR.');
+    // El login se pidió a mitad de camino (al abrir la ficha técnica o generar
+    // un informe, no al entrar a la app) — tras autenticar, se retoma justo
+    // donde el técnico quedó en vez de mandarlo de vuelta al escáner.
+    if (pendingDestino === 'ficha') {
+      pendingDestino = null;
+      goTo('step-confirm-3');
+    } else if (pendingDestino === 'informe') {
+      pendingDestino = null;
+      abrirFormularioInforme();
     } else {
-      // Login normal, sin tag ni activo ya resuelto: hay que escanear algo primero.
-      // (goTo('step-confirm-2') aquí sin datos reales era un resabio del mock viejo.)
       goTo('step-read');
       iniciarModoLectura();
     }
@@ -219,6 +220,13 @@ accessBtn.addEventListener('click', async () => {
   } finally {
     accessBtn.disabled = false;
   }
+});
+
+// El login ahora se pide a mitad de camino (no al entrar a la app), así que
+// hace falta poder cancelarlo y volver a donde estaba el técnico sin loguearse.
+document.getElementById('back-from-access').addEventListener('click', () => {
+  pendingDestino = null;
+  goTo(activoActualId ? 'step-confirm-2' : 'step-read');
 });
 
 [emailInput, passwordInput].forEach(input => {
@@ -265,7 +273,10 @@ function detectionFeedback(){
 
 let readState = 'idle'; // idle | reading | found
 let sessionAuthenticated = false; // true tras confirmar sesión (login o cookie válida al cargar)
-let pendingActivoId = null; // código de ?activo=ID pendiente de resolver tras el login
+// Qué hacer tras el login: 'ficha' (abrir la ficha técnica) o 'informe' (abrir
+// el formulario de informe) — se pide login solo en esos dos puntos, nunca
+// para identificar el activo (ver open-ficha-2 y report-fab).
+let pendingDestino = null;
 const nfcCore = document.querySelector('.nfc-core');
 
 function resetReadState(){
@@ -305,7 +316,24 @@ function iniciarAutoLecturaNFC(){
 }
 
 // ---- Navegación ficha técnica ----
-document.getElementById('open-ficha-2').addEventListener('click', () => goTo('step-confirm-3'));
+// Puerta de acceso para "Abrir ficha técnica" y "Generar informe": la sesión
+// se confirma en segundo plano al arrancar (ver iniciarApp), así que si el
+// técnico escaneó y tocó uno de estos botones muy rápido, sessionAuthenticated
+// podría no estar actualizado todavía aunque la cookie siga siendo válida —
+// por eso se vuelve a confirmar en vivo antes de mandarlo al login.
+async function requiereLogin(destino){
+  if (sessionAuthenticated) return false;
+  sessionAuthenticated = await verificarSesionActual();
+  if (sessionAuthenticated) return false;
+  pendingDestino = destino;
+  goTo('step-access');
+  return true;
+}
+
+document.getElementById('open-ficha-2').addEventListener('click', async () => {
+  if (await requiereLogin('ficha')) return;
+  goTo('step-confirm-3');
+});
 document.getElementById('back-to-read').addEventListener('click', () => {
   resetReadState();
   goTo('step-read');
@@ -1403,7 +1431,10 @@ let informeFotos = [];
 // vuelta; se guarda aparte para armar fechas válidas al persistir en el backend.
 let informeFechaISO = null;
 
-document.getElementById('report-fab').addEventListener('click', () => {
+// Abre el formulario de informe ya con los campos iniciales listos — separado
+// del listener para poder llamarlo también después de un login pedido a mitad
+// de camino (ver pendingDestino === 'informe' en accessBtn arriba).
+function abrirFormularioInforme(){
   document.getElementById('informe-tecnico').textContent = welcomeName.textContent || 'usuario';
   const ahora = new Date();
   informeFechaISO = ahora.toISOString().slice(0, 10);
@@ -1443,6 +1474,11 @@ document.getElementById('report-fab').addEventListener('click', () => {
     document.getElementById('informe-hora-termino').classList.remove('field-invalid');
     validarInforme();
   });
+}
+
+document.getElementById('report-fab').addEventListener('click', async () => {
+  if (await requiereLogin('informe')) return;
+  abrirFormularioInforme();
 });
 document.getElementById('back-informe').addEventListener('click', () => goTo('step-confirm-3'));
 let previewOrigen = 'nuevo';
@@ -2521,17 +2557,13 @@ function mapearActivoDesdeApi(data){
   };
 }
 
-// Busca el activo en el backend real. Si la sesión expiró, manda de vuelta al login
-// en vez de fallar en silencio (ver skill offline-sync: nunca fallar silenciosamente).
+// Busca el activo en el backend — identificación pública, sin login (ver
+// app/api/public/assets/[tag_code]/route.ts). El login solo se pide más
+// adelante, al abrir la ficha técnica completa o generar un informe.
 async function buscarActivoRemoto(id){
   if (!navigator.onLine) return null;
   try {
-    const resp = await fetch('/api/assets/' + encodeURIComponent(id));
-    if (resp.status === 401) {
-      sessionAuthenticated = false;
-      goTo('step-access');
-      return null;
-    }
+    const resp = await fetch('/api/public/assets/' + encodeURIComponent(id));
     if (!resp.ok) return null;
     const data = await resp.json();
     return mapearActivoDesdeApi(data);
@@ -2563,8 +2595,10 @@ async function resolverActivoEscaneado(id, opciones){
   nfcMainText.textContent = ACTIVOS[id].nombre;
   detectionFeedback();
   aplicarActivo(id);
+  // La identificación del activo es pública — el login se pide después,
+  // al abrir la ficha técnica o generar un informe (ver open-ficha-2 y report-fab).
   setTimeout(() => {
-    goTo(sessionAuthenticated ? 'step-confirm-2' : 'step-access');
+    goTo('step-confirm-2');
   }, opciones.origen === 'qr' ? 250 : 550);
   return true;
 }
@@ -2854,10 +2888,13 @@ if (!enModoStandalone) {
   }
 }
 
-// ---- Arranque: confirma sesión real contra el backend y decide la pantalla inicial ----
-// Los datos de activos ahora viven en una base real por tenant, así que ni la apertura
-// directa por tag NFC (?activo=ID) puede saltarse el login — solo se resuelve el activo
-// pendiente automáticamente apenas la sesión queda confirmada.
+// ---- Arranque: escanear es lo primero, el login se pide después ----
+// Identificar un activo (QR/NFC/código manual) es público — no requiere sesión,
+// ver app/api/public/assets/[tag_code]/route.ts. El login solo se pide más
+// adelante, al abrir la ficha técnica o generar un informe (open-ficha-2,
+// report-fab), así que aquí la sesión se confirma en segundo plano, sin
+// bloquear el escaneo: si ya había sesión (cookie de una visita anterior) esos
+// dos puntos no vuelven a pedir usuario y contraseña.
 async function verificarSesionActual(){
   if (!navigator.onLine) return false; // sin red no hay forma de validar la sesión
   try {
@@ -2873,34 +2910,16 @@ async function verificarSesionActual(){
 }
 
 (async function iniciarApp(){
-  // step-read no tiene la clase "hidden" en el HTML crudo — sin este goTo() síncrono
-  // se alcanzaría a ver un flash de esa pantalla mientras se espera la verificación
-  // de sesión (que es asíncrona, por la llamada de red a /api/auth/get-session).
-  goTo('step-access');
+  goTo('step-read');
+  iniciarModoLectura();
 
   const idDesdeUrl = idActivoDesdeUrl();
-  sessionAuthenticated = await verificarSesionActual();
-
-  if (idDesdeUrl && sessionAuthenticated) {
-    goTo('step-read');
+  if (idDesdeUrl) {
     const resuelto = await resolverActivoEscaneado(idDesdeUrl, { origen: 'nfc-url' });
     if (!resuelto) mostrarHintLectura('No se pudo cargar el activo del tag. Intenta de nuevo o usa QR.');
-    return;
   }
 
-  if (idDesdeUrl && !sessionAuthenticated) {
-    pendingActivoId = idDesdeUrl; // se resuelve automáticamente apenas se loguee
-    goTo('step-access');
-    return;
-  }
-
-  if (sessionAuthenticated) {
-    goTo('step-read');
-    iniciarModoLectura();
-    return;
-  }
-
-  goTo('step-access');
+  sessionAuthenticated = await verificarSesionActual();
 })();
 
 // ---- Registro del Service Worker (PWA instalable + soporte offline) ----
