@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Librerías de terceros vendorizadas sin build step propio (jsQR, jsPDF)
+    // y prototipos históricos — no es código nuestro, lint-earlos solo genera ruido.
+    "public/vendor/**",
+    "legacy/**",
   ]),
 ]);
 
