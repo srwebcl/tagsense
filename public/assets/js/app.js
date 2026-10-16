@@ -97,6 +97,10 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', actu
 
 function goTo(id){
   actualizarAltoViewport();
+  // Sin esto, si la pantalla anterior quedó con scroll, la nueva pantalla
+  // arranca a mitad de scroll — se ve como un margen extra arriba que en
+  // realidad es contenido ya pasado de la pantalla anterior.
+  window.scrollTo(0, 0);
   steps.forEach(s => {
     const el = document.getElementById(s);
     if(!el) return;
@@ -112,13 +116,35 @@ function goTo(id){
 
   const reportFab = document.getElementById('report-fab');
   if (reportFab) {
+    // step-confirm-2, step-confirm-3 y step-info-general quedan afuera a
+    // propósito: en las dos primeras el contenido ya ocupa casi toda la
+    // pantalla y tienen su propio botón en línea para generar informe (el
+    // botón grande en confirm-2, "Generar Informe" junto a "Asistente Técnico"
+    // en confirm-3); info-general es una ficha de specs técnicas que puede
+    // crecer mucho según el activo (specs variables) y es de solo lectura —
+    // sin ninguna acción propia que el FAB tuviera que acompañar. Un FAB ahí
+    // competía con ese contenido. En las pantallas de abajo sí aporta, porque
+    // son listas/sub-secciones sin esa acción ya disponible en línea.
     const EQUIPMENT_CONTEXT_STEPS = [
-      'step-confirm-2', 'step-confirm-3', 'step-asistente', 'step-info-general',
+      'step-asistente',
       'step-historial', 'step-documentos', 'step-repuestos', 'step-doc-reader',
       'step-instructivos', 'step-solicitudes'
     ];
-    reportFab.classList.toggle('show', EQUIPMENT_CONTEXT_STEPS.includes(id));
-    reportFab.classList.toggle('raised', id === 'step-asistente');
+    const muestraFab = EQUIPMENT_CONTEXT_STEPS.includes(id);
+    reportFab.classList.toggle('show', muestraFab);
+    if (muestraFab) {
+      // Lo movemos DENTRO de la pantalla activa (al final, o justo antes de la
+      // barra de chat en el asistente) — así es sticky respecto a esa pantalla,
+      // no fixed respecto al viewport, y nunca puede flotar encima de otro
+      // control sin importar cuánto contenido tenga cada pantalla.
+      const stageEl = document.getElementById(id);
+      const chatInputRow = stageEl ? stageEl.querySelector('.chat-input-row') : null;
+      if (chatInputRow) {
+        stageEl.insertBefore(reportFab, chatInputRow);
+      } else if (stageEl) {
+        stageEl.appendChild(reportFab);
+      }
+    }
   }
 }
 
@@ -364,6 +390,14 @@ document.querySelectorAll('.btn-asistente').forEach(btn => {
   });
 });
 document.getElementById('back-asistente').addEventListener('click', () => goTo('step-confirm-3'));
+
+// Acceso a "Generar informe" directo en la ficha técnica — en línea, no flotante
+// (ver nota de EQUIPMENT_CONTEXT_STEPS más abajo sobre por qué step-confirm-3
+// no usa el FAB).
+document.getElementById('btn-informe-confirm3').addEventListener('click', async () => {
+  if (await requiereLogin('informe')) return;
+  abrirFormularioInforme();
+});
 
 // ================= ASISTENTE TÉCNICO — MOTOR LOCAL GROUNDED EN MANUAL MT65S =================
 // Nota: responde con una base de conocimiento local (no llama a ningún servicio externo),

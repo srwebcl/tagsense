@@ -22,21 +22,23 @@
 <body>
 <div class="offline-banner" id="offline-banner"></div>
 
-<button class="theme-toggle" id="theme-toggle" aria-label="Cambiar entre modo claro y oscuro" type="button">
-  <svg class="ic-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-  <svg class="ic-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-</button>
-
-<button class="field-toggle" id="field-toggle" aria-label="Activar modo terreno (alto contraste)" type="button">
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2 12h3M19 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-</button>
-
 <button class="report-fab" id="report-fab" type="button">
   <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10l4 4v14H7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h8M9 16h8M9 8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
   Generar Informe
 </button>
 
 <div class="panel">
+  <!-- Controles de tema, fijos en el flujo normal (no position:fixed) para que nunca
+       queden flotando sobre contenido al hacer scroll de una pantalla larga. -->
+  <div class="panel-toolbar">
+    <button class="field-toggle" id="field-toggle" aria-label="Activar modo terreno (alto contraste)" type="button">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg>
+    </button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Cambiar entre modo claro y oscuro" type="button">
+      <svg class="ic-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <svg class="ic-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
 
   <!-- PASO 1: ACCESO DIRECTO -->
   <div class="stage step-fade hidden" id="step-access">
@@ -211,7 +213,7 @@
       <div class="qa-tile clickable" id="tile-info-general" role="button" tabindex="0">
         <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><circle cx="14" cy="7.5" r="1.4" fill="#b3a57e"/></svg></div>
         <div class="qa-txt">
-          <strong>Información General</strong>
+          <strong>Información</strong>
           <small>Datos del activo</small>
         </div>
       </div>
@@ -232,8 +234,8 @@
       <div class="qa-tile clickable" id="tile-repuestos" role="button" tabindex="0">
         <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="7" cy="18" r="2" stroke="#b3a57e" stroke-width="1.6"/><circle cx="17" cy="18" r="2" stroke="#b3a57e" stroke-width="1.6"/><path d="M3 5h2l2 11h11l2-8H7" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="qa-txt">
-          <strong>Componentes del Activo</strong>
-          <small>Necesarios</small>
+          <strong>Componentes</strong>
+          <small>Piezas críticas</small>
         </div>
       </div>
       <div class="qa-tile clickable" id="tile-instructivos" role="button" tabindex="0">
@@ -246,7 +248,7 @@
       <div class="qa-tile clickable" id="tile-solicitudes" role="button" tabindex="0">
         <div class="qa-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l1 3h3v15H5V6h3z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11l2 2 4-4" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="qa-txt">
-          <strong>Solicitudes de Mantenimiento</strong>
+          <strong>Solicitudes</strong>
           <small id="sm-tile-count">Sin solicitudes</small>
         </div>
       </div>
@@ -258,6 +260,13 @@
         <div class="btn-txt">
           <span>Asistente Técnico</span>
           <span class="btn-subtitle"><span class="dot"></span>Diagnóstico rápido por falla</span>
+        </div>
+      </div>
+      <div class="action-btn outline" id="btn-informe-confirm3" role="button" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10l4 4v14H7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 12h8M9 16h8M9 8h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <div class="btn-txt">
+          <span>Generar Informe</span>
+          <span class="btn-subtitle">Registrar una mantención</span>
         </div>
       </div>
     </div>
@@ -342,7 +351,7 @@
   </div>
 
   <!-- PASO 7: INFORMACIÓN GENERAL -->
-  <div class="stage step-fade hidden centered" id="step-info-general">
+  <div class="stage step-fade hidden" id="step-info-general">
     <div class="detail-topbar">
       <div class="detail-back" id="back-to-ficha" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -422,7 +431,7 @@
   </div>
 
   <!-- PASO 8: HISTORIAL -->
-  <div class="stage step-fade hidden centered" id="step-historial">
+  <div class="stage step-fade hidden" id="step-historial">
     <div class="detail-topbar">
       <div class="detail-back" id="back-historial" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -455,7 +464,7 @@
   </div>
 
   <!-- PASO 9: DOCUMENTOS -->
-  <div class="stage step-fade hidden centered" id="step-documentos">
+  <div class="stage step-fade hidden" id="step-documentos">
     <div class="detail-topbar">
       <div class="detail-back" id="back-documentos" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -539,7 +548,7 @@
   </div>
 
   <!-- PASO 10: REPUESTOS -->
-  <div class="stage step-fade hidden centered" id="step-repuestos">
+  <div class="stage step-fade hidden" id="step-repuestos">
     <div class="detail-topbar">
       <div class="detail-back" id="back-repuestos" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -569,7 +578,7 @@
 
 
   <!-- INSTRUCTIVOS DE VERIFICACIÓN: LISTA -->
-  <div class="stage step-fade hidden centered" id="step-instructivos">
+  <div class="stage step-fade hidden" id="step-instructivos">
     <div class="detail-topbar">
       <div class="detail-back" id="back-instructivos" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -582,12 +591,12 @@
   </div>
 
   <!-- SOLICITUDES DE MANTENIMIENTO -->
-  <div class="stage step-fade hidden centered" id="step-solicitudes">
+  <div class="stage step-fade hidden" id="step-solicitudes">
     <div class="detail-topbar">
       <div class="detail-back" id="back-solicitudes" role="button" tabindex="0" aria-label="Volver">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="detail-title">Solicitudes de Mantenimiento</div>
+      <div class="detail-title">Solicitudes</div>
     </div>
 
     <p class="comp-section-label" style="margin-top:4px;">Generadas desde los informes de este equipo</p>

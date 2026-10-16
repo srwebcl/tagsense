@@ -26,26 +26,28 @@
   body.theme-light .panel{ box-shadow:0 30px 80px -24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.6); border-color:#e4ddd0; }
   body.theme-light .photo-card{ background:linear-gradient(180deg, #ffffff 0%, #f0ece3 100%); border:1px solid var(--graphite-line); }
 
-  .theme-toggle{
-    position:fixed; top:16px; right:16px; z-index:50;
+  /* Antes .theme-toggle/.field-toggle eran position:fixed respecto al viewport —
+     en pantallas largas con scroll (ej. el formulario de informe) terminaban
+     flotando encima de controles reales (hasta encima del switch "Equipo queda
+     operativo"). Ahora viven en .panel-toolbar, en el flujo normal: se ven arriba
+     de cada pantalla y se van con el scroll, nunca tapan nada. */
+  .panel-toolbar{
+    display:flex; justify-content:flex-end; align-items:center; gap:8px;
+    width:100%; margin-bottom:14px; flex-shrink:0;
+  }
+
+  .theme-toggle, .field-toggle{
     width:38px; height:38px; border-radius:50%; border:1px solid var(--graphite-line);
     background:var(--graphite); color:var(--text-mid); display:flex; align-items:center; justify-content:center;
-    cursor:pointer; transition:transform .12s ease;
+    cursor:pointer; transition:transform .12s ease; flex-shrink:0;
   }
-  .theme-toggle:active{ transform:scale(0.92); }
+  .theme-toggle:active, .field-toggle:active{ transform:scale(0.92); }
   .theme-toggle svg{ width:18px; height:18px; }
   .theme-toggle .ic-moon{ display:block; }
   .theme-toggle .ic-sun{ display:none; }
   body.theme-light .theme-toggle .ic-moon{ display:none; }
   body.theme-light .theme-toggle .ic-sun{ display:block; }
 
-  .field-toggle{
-    position:fixed; top:62px; right:16px; z-index:50;
-    width:38px; height:38px; border-radius:50%; border:1px solid var(--graphite-line);
-    background:var(--graphite); color:var(--text-mid); display:flex; align-items:center; justify-content:center;
-    cursor:pointer; transition:transform .12s ease;
-  }
-  .field-toggle:active{ transform:scale(0.92); }
   .field-toggle svg{ width:17px; height:17px; }
   .field-toggle.active{ background:var(--copper-2); border-color:var(--copper-2); color:#1a0f05; }
 
@@ -63,15 +65,15 @@
     min-height:100vh;
     min-height:calc(var(--vh, 1vh) * 100);
     min-height:100dvh;
-    padding:24px 20px 40px;
+    padding:calc(24px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
   }
 
   .panel{
     width:100%;
     max-width:420px;
-    min-height:calc(100vh - 64px);
-    min-height:calc(var(--vh, 1vh) * 100 - 64px);
-    min-height:calc(100dvh - 64px);
+    min-height:calc(100vh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height:calc(var(--vh, 1vh) * 100 - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height:calc(100dvh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     display:flex;
     flex-direction:column;
   }
@@ -451,7 +453,6 @@
 
   .chat-messages{
     display:flex; flex-direction:column; gap:12px; width:100%; padding-bottom:14px;
-    min-height:280px;
   }
   .chat-bubble-row{ display:flex; gap:8px; width:100%; }
   .chat-bubble-row.user{ justify-content:flex-end; }
@@ -601,7 +602,15 @@
 
   /* ===== INFORME DE MANTENIMIENTO ===== */
   .report-fab{
-    position:fixed; right:16px; bottom:22px; z-index:60;
+    /* sticky, no fixed: goTo() en app.js mueve este botón al final de la pantalla
+       activa (o justo antes de la barra de chat en el asistente). Al vivir en el
+       flujo normal del documento, reserva su propio espacio real — nunca puede
+       quedar flotando encima de otro botón o control, pase lo que pase con el
+       largo del contenido. Mientras el contenido no llena la pantalla se ve como
+       un botón normal al final; en listas largas se pega al fondo al hacer scroll,
+       como cualquier FAB. */
+    position:sticky; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:60;
+    align-self:flex-end; margin-top:18px; flex-shrink:0;
     display:none; align-items:center; gap:8px;
     background:linear-gradient(135deg, var(--copper-1) 0%, var(--copper-2) 100%);
     color:#1a0f05; border:none; border-radius:28px; padding:13px 18px 13px 15px;
@@ -609,7 +618,6 @@
     box-shadow:0 10px 24px -6px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
   }
   .report-fab.show{ display:flex; }
-  .report-fab.raised{ bottom:88px; }
   .report-fab svg{ width:18px; height:18px; flex-shrink:0; }
   .report-fab:active{ transform:scale(0.96); }
 
@@ -865,12 +873,12 @@
     text-transform:uppercase; margin:0 0 14px; text-align:center;
   }
   .qa-grid{
-    display:grid; grid-template-columns:repeat(2, 1fr); gap:14px; width:100%; margin-bottom:20px;
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; width:100%; margin-bottom:20px;
   }
   .qa-tile{
     background:var(--bg-1);
     border:1px solid var(--graphite-line); border-radius:16px;
-    padding:28px 14px 22px; display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:20px 14px 16px; display:flex; flex-direction:column; align-items:center; gap:12px;
     text-align:center; user-select:none;
   }
   .qa-ic{
@@ -1000,12 +1008,12 @@
     text-transform:uppercase; margin:4px 0 10px;
   }
   .manual-qa-grid{
-    display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:12px;
+    display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:12px;
   }
   .manual-qa-tile{
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
     background:var(--graphite); border:1px solid var(--graphite-line); border-radius:12px;
-    padding:12px 4px; text-align:center; cursor:pointer; transition:border-color .12s ease;
+    padding:9px 4px; text-align:center; cursor:pointer; transition:border-color .12s ease;
   }
   .manual-qa-tile:active{ border-color:var(--copper-2); }
   .manual-qa-tile svg{ width:20px; height:20px; }
