@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
@@ -86,6 +87,10 @@ export async function crearActivo(formData: FormData) {
     await guardarFotoActivo(appUser.tenant_id, assetId, photo);
   }
 
+  // Sin esto, volver al listado después de crear mostraba la versión cacheada
+  // de antes del alta — había que recargar la página a mano para verlo (ver
+  // "Place revalidation calls before redirect" en los docs de Server Actions).
+  revalidatePath("/admin");
   redirect(`/admin/assets/${assetId}`);
 }
 
@@ -136,6 +141,11 @@ export async function actualizarActivo(assetId: string, formData: FormData) {
     await guardarFotoActivo(appUser.tenant_id, assetId, photo);
   }
 
+  // La ficha del activo (destino del redirect) ya se visitó antes de llegar
+  // acá (el botón "Editar" vive en esa misma página) — sin revalidar queda
+  // la versión cacheada de antes del cambio.
+  revalidatePath(`/admin/assets/${assetId}`);
+  revalidatePath("/admin");
   redirect(`/admin/assets/${assetId}`);
 }
 
@@ -173,6 +183,9 @@ export async function subirFotoActivo(assetId: string, formData: FormData) {
   }
 
   await guardarFotoActivo(appUser.tenant_id, assetId, photo);
+  // Sin esto, la foto recién subida no se veía hasta recargar la página a
+  // mano — la ficha del activo ya estaba en la caché del router desde antes.
+  revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
 }
 
@@ -200,6 +213,9 @@ export async function eliminarActivo(assetId: string) {
   // document_chunks) se borran solos — ver "on delete cascade" en 0001_init_schema.sql.
   await pool.query(`delete from assets where tenant_id = $1 and id = $2`, [appUser.tenant_id, assetId]);
 
+  // Sin esto, el activo borrado seguía apareciendo en el listado hasta
+  // recargar la página a mano.
+  revalidatePath("/admin");
   redirect("/admin");
 }
 
@@ -242,6 +258,7 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   const documentId = docResult.rows[0].id;
   after(() => indexDocument(documentId, appUser.tenant_id));
 
+  revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
 }
 
@@ -261,6 +278,7 @@ export async function reindexarDocumento(assetId: string, documentId: string) {
   }
 
   after(() => indexDocument(documentId, appUser.tenant_id));
+  revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
 }
 
@@ -272,5 +290,6 @@ export async function resolverSolicitudAdmin(assetId: string, requestId: string)
      where tenant_id = $2 and id = $3 and estado = 'Abierta'`,
     [appUser.id, appUser.tenant_id, requestId]
   );
+  revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
 }
