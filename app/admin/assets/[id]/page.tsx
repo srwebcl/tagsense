@@ -114,10 +114,18 @@ export default async function AssetDetailPage({
               </p>
             </div>
           </div>
-          <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
-            <span className="dot" />
-            {STATUS_LABEL[asset.status] || asset.status}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
+              <span className="dot" />
+              {STATUS_LABEL[asset.status] || asset.status}
+            </span>
+            <Link href={`/admin/assets/${id}/edit`} className="btn-outline">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+              Editar
+            </Link>
+          </div>
         </div>
 
         <p className="section-label">Código QR del tag</p>

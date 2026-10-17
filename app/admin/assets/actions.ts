@@ -14,6 +14,28 @@ function parseYear(raw: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) && n > 1900 && n < 2100 ? n : null;
 }
 
+// specs es jsonb freeform (ver 0005_asset_fields.sql) — solo se guardan las
+// claves que el técnico realmente completó, para no mostrar filas vacías
+// en "Información General" (ver setFilaOpcional en app.js). Comparte el mapeo
+// entre crearActivo y actualizarActivo porque ambos formularios usan los mismos
+// nombres de campo (ver app/admin/assets/new/page.tsx y .../[id]/edit/page.tsx).
+const SPECS_FIELDS: Record<string, string> = {
+  country_of_origin: "specs_country_of_origin",
+  operating_weight: "specs_operating_weight",
+  load_capacity: "specs_load_capacity",
+  engine_type: "specs_engine_type",
+  power: "specs_power",
+};
+
+function construirSpecsDesdeFormData(formData: FormData): Record<string, string> {
+  const specs: Record<string, string> = {};
+  for (const [key, field] of Object.entries(SPECS_FIELDS)) {
+    const val = String(formData.get(field) || "").trim();
+    if (val) specs[key] = val;
+  }
+  return specs;
+}
+
 export async function crearActivo(formData: FormData) {
   const appUser = await requireAdmin();
 
@@ -23,21 +45,7 @@ export async function crearActivo(formData: FormData) {
     throw new Error("tag_code y name son obligatorios.");
   }
 
-  // specs es jsonb freeform (ver 0005_asset_fields.sql) — solo se guardan las
-  // claves que el técnico realmente completó, para no mostrar filas vacías
-  // en "Información General" (ver setFilaOpcional en app.js).
-  const specsFields: Record<string, string> = {
-    country_of_origin: "specs_country_of_origin",
-    operating_weight: "specs_operating_weight",
-    load_capacity: "specs_load_capacity",
-    engine_type: "specs_engine_type",
-    power: "specs_power",
-  };
-  const specs: Record<string, string> = {};
-  for (const [key, field] of Object.entries(specsFields)) {
-    const val = String(formData.get(field) || "").trim();
-    if (val) specs[key] = val;
-  }
+  const specs = construirSpecsDesdeFormData(formData);
 
   let result;
   try {
@@ -72,6 +80,56 @@ export async function crearActivo(formData: FormData) {
     throw new Error("No se pudo crear el activo. Intenta de nuevo.");
   }
   const assetId = result.rows[0].id;
+
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    await guardarFotoActivo(appUser.tenant_id, assetId, photo);
+  }
+
+  redirect(`/admin/assets/${assetId}`);
+}
+
+// tag_code no se edita acá a propósito: es el código físico ya impreso/grabado
+// en el QR/NFC pegado al equipo — cambiarlo en la base de datos sin reemplazar
+// el tag físico dejaría el QR escaneado apuntando a un activo que ya no existe
+// con ese código.
+export async function actualizarActivo(assetId: string, formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const name = String(formData.get("name") || "").trim();
+  if (!name) {
+    throw new Error("El nombre es obligatorio.");
+  }
+
+  const assetResult = await pool.query(
+    `select id from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, assetId]
+  );
+  if (!assetResult.rows[0]) {
+    throw new Error("Activo no encontrado.");
+  }
+
+  const specs = construirSpecsDesdeFormData(formData);
+
+  await pool.query(
+    `update assets set
+       name = $1, model = $2, serial_number = $3, status = $4, location = $5,
+       asset_type = $6, manufacturer = $7, manufacture_year = $8, specs = $9
+     where tenant_id = $10 and id = $11`,
+    [
+      name,
+      String(formData.get("model") || "").trim() || null,
+      String(formData.get("serial_number") || "").trim() || null,
+      String(formData.get("status") || "operativo"),
+      String(formData.get("location") || "").trim() || null,
+      String(formData.get("asset_type") || "").trim() || null,
+      String(formData.get("manufacturer") || "").trim() || null,
+      parseYear(formData.get("manufacture_year")),
+      JSON.stringify(specs),
+      appUser.tenant_id,
+      assetId,
+    ]
+  );
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
