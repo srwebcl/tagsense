@@ -402,7 +402,12 @@ document.getElementById('back-historial').addEventListener('click', () => goTo('
 document.getElementById('tile-documentos').addEventListener('click', () => goTo('step-documentos'));
 document.getElementById('back-documentos').addEventListener('click', () => goTo('step-confirm-3'));
 
-document.getElementById('tile-repuestos').addEventListener('click', () => { renderComponentes(); goTo('step-repuestos'); });
+document.getElementById('tile-repuestos').addEventListener('click', () => {
+  const list = document.getElementById('comp-criticos-list');
+  if (list) list.innerHTML = '<p class="historial-status">Cargando componentes…</p>';
+  goTo('step-repuestos');
+  cargarComponentes();
+});
 document.getElementById('back-repuestos').addEventListener('click', () => goTo('step-confirm-3'));
 
 document.querySelectorAll('.btn-asistente').forEach(btn => {
@@ -1513,6 +1518,57 @@ function crearComponentesIniciales(){
 function getComponentesActivo(id){
   if (!COMPONENTES_POR_ACTIVO[id]) COMPONENTES_POR_ACTIVO[id] = crearComponentesIniciales();
   return COMPONENTES_POR_ACTIVO[id];
+}
+
+// Trae la ficha de vida real desde el backend (GET /api/assets/:id/components —
+// se reconstruye a partir del historial de intervenciones, no hay tabla aparte,
+// ver esa ruta). Antes esto vivía solo en memoria del navegador y se perdía al
+// recargar la página; ahora cada apertura de esta pantalla trae lo que de verdad
+// quedó guardado, incluidos los informes que se sincronizaron desde la cola offline.
+async function cargarComponentes(){
+  const container = document.getElementById('comp-criticos-list');
+  if (!container || !activoActualId) return;
+
+  if (!navigator.onLine) {
+    if (COMPONENTES_POR_ACTIVO[activoActualId]) { renderComponentes(); return; }
+    container.innerHTML = '<p class="historial-status">Sin conexión — los componentes no están disponibles offline todavía.</p>';
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/components`);
+    if (!resp.ok) { renderComponentes(); return; } // se queda con lo que ya había en caché/default
+
+    const filas = await resp.json();
+    const estado = crearComponentesIniciales();
+    for (const fila of filas) {
+      const c = estado[fila.componente];
+      if (!c) continue; // componente desconocido — no debería pasar, pero no revienta la pantalla
+      const horometroNum = parseHorometro(fila.horometro);
+      c.historial.push({
+        fecha: fila.started_at ? new Date(fila.started_at).toLocaleDateString('es-CL') : '—',
+        horometro: horometroNum !== null ? horometroNum : '—',
+        folio: fila.folio || '—',
+        detalle: fila.detalle || 'Intervención registrada.',
+        empresa: fila.empresa,
+        tecnico: fila.tecnico,
+      });
+    }
+    // El backend ya ordena por fecha descendente — la primera entrada de cada
+    // componente es la intervención más reciente, la que define su estado "actual".
+    for (const c of Object.values(estado)) {
+      if (!c.historial.length) continue;
+      const ultima = c.historial[0];
+      c.estado = 'reparado';
+      c.empresa = ultima.empresa || 'Taller interno';
+      c.fechaInstalacion = ultima.fecha !== '—' ? ultima.fecha : null;
+      if (typeof ultima.horometro === 'number') c.horometroInstalacion = ultima.horometro;
+    }
+    COMPONENTES_POR_ACTIVO[activoActualId] = estado;
+    renderComponentes();
+  } catch (err) {
+    renderComponentes(); // sin conexión real (fetch tiró): se queda con lo que había
+  }
 }
 
 const COMP_ICONS = {

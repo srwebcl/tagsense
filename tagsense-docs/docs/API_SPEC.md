@@ -37,6 +37,8 @@ POST   /api/interventions           -> crea intervención (puede llegar marcada 
 PATCH  /api/interventions/:id       -> completar/editar
 GET    /api/assets/:id/interventions -> historial del activo
 POST   /api/interventions/:id/photos -> sube evidencia fotográfica
+GET    /api/assets/:id/components   -> ficha de vida por componente crítico (motor, transmisión, etc.),
+                                        derivada de interventions.details->>'componente' — no hay tabla aparte
 ```
 
 ## Sincronización offline
