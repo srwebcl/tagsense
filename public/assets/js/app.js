@@ -1416,7 +1416,18 @@ actualizarTileSolicitudes();
 // pantalla "Solicitudes" como de fondo al abrir la ficha técnica (para que el
 // contador del tile y el badge "pendiente" en Componentes ya tengan datos).
 async function cargarSolicitudes(){
-  if (!activoActualId || !navigator.onLine) return;
+  if (!activoActualId) return;
+  if (!navigator.onLine) {
+    // Sin esto, el tile deja "Cargando solicitudes…" fijo para siempre si se
+    // abre la pantalla sin conexión (mismo patrón de fallback que cargarHistorial).
+    if (solicitudesCache.length) {
+      renderSMList();
+    } else {
+      const cont = document.getElementById('sm-list');
+      if (cont) cont.innerHTML = '<p class="historial-status">Sin conexión — las solicitudes no están disponibles offline todavía.</p>';
+    }
+    return;
+  }
   try {
     const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/maintenance-requests`);
     if (!resp.ok) return;

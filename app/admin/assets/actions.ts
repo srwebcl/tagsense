@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
 import { indexDocument } from "@/lib/indexing";
+import { detectImageKind, isPdf } from "@/lib/file-validation";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
   const n = parseInt(String(raw || "").trim(), 10);
@@ -63,10 +64,20 @@ export async function crearActivo(formData: FormData) {
   redirect(`/admin/assets/${assetId}`);
 }
 
+const IMAGE_CONTENT_TYPE: Record<string, string> = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+
 async function guardarFotoActivo(tenantId: string, assetId: string, photo: File) {
-  const key = `asset-photos/${tenantId}/${assetId}/${randomUUID()}-${photo.name}`;
   const bytes = new Uint8Array(await photo.arrayBuffer());
-  await uploads.upload(key, bytes, { contentType: photo.type || "image/jpeg" });
+  // `photo.type` lo arma el navegador según la extensión del archivo elegido —
+  // no protege de un archivo con otro contenido real. Se valida la firma de
+  // bytes en vez de confiar en el content-type declarado por el cliente.
+  const kind = detectImageKind(bytes);
+  if (!kind) {
+    throw new Error("El archivo debe ser una imagen JPEG, PNG o WEBP válida.");
+  }
+
+  const key = `asset-photos/${tenantId}/${assetId}/${randomUUID()}-${photo.name}`;
+  await uploads.upload(key, bytes, { contentType: IMAGE_CONTENT_TYPE[kind] });
   await pool.query(`update assets set photo_url = $1 where tenant_id = $2 and id = $3`, [key, tenantId, assetId]);
 }
 
@@ -136,9 +147,13 @@ export async function subirDocumento(assetId: string, formData: FormData) {
     throw new Error("Activo no encontrado.");
   }
 
-  const key = `documents/${appUser.tenant_id}/${assetId}/${randomUUID()}-${file.name}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  await uploads.upload(key, bytes, { contentType: file.type || "application/pdf" });
+  if (!isPdf(bytes)) {
+    throw new Error("El documento debe ser un PDF válido.");
+  }
+
+  const key = `documents/${appUser.tenant_id}/${assetId}/${randomUUID()}-${file.name}`;
+  await uploads.upload(key, bytes, { contentType: "application/pdf" });
 
   const docResult = await pool.query(
     `insert into asset_documents (tenant_id, asset_id, title, document_type, file_url, uploaded_by)

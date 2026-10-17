@@ -10,7 +10,17 @@ import { attachDatabasePool } from "@vercel/functions";
 // La guía oficial de Neon lo confirma: "Enforce authorization in the Function
 // instead of relying on browser-facing RLS". Por eso TODA query de este archivo
 // filtra explícitamente por tenant_id — esa es la capa que de verdad aísla tenants.
-const pool = new Pool({ connectionString: process.env.APP_DATABASE_URL });
+// max bajo a propósito: cada instancia serverless (Vercel Function) crea su
+// propio Pool, y con tráfico concurrente real son muchas instancias en paralelo
+// — el default de pg (10) multiplicado por N instancias puede agotar las
+// conexiones del endpoint de Neon. attachDatabasePool ya cierra el pool al
+// terminar la invocación; idleTimeoutMillis evita mantener conexiones ociosas
+// entre invocaciones de la misma instancia reciclada.
+const pool = new Pool({
+  connectionString: process.env.APP_DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 10_000,
+});
 attachDatabasePool(pool);
 
 export { pool };
