@@ -55,7 +55,7 @@
     display:flex; justify-content:space-between; align-items:center; gap:8px;
     width:100%; margin-bottom:14px; flex-shrink:0;
   }
-  .panel-logo{ height:22px; width:auto; max-width:40%; object-fit:contain; }
+  .panel-logo{ height:28px; width:auto; max-width:45%; object-fit:contain; }
   .panel-toolbar-toggles{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
 
   .theme-toggle, .field-toggle{
