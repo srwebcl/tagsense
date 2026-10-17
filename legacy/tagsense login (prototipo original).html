@@ -1794,7 +1794,7 @@
 
     <div class="report-section-label hidden" id="empresa-section-label">Empresa que intervino</div>
     <div class="yn-pill-row hidden" id="empresa-tipo-row">
-      <div class="yn-pill selected" id="empresa-interno" role="button" tabindex="0">Interno Pucobre</div>
+      <div class="yn-pill selected" id="empresa-interno" role="button" tabindex="0">Taller interno</div>
       <div class="yn-pill" id="empresa-externo" role="button" tabindex="0">Proveedor Externo</div>
     </div>
     <input type="text" class="report-input hidden" id="empresa-externo-nombre" list="empresas-recientes" placeholder="Nombre del proveedor / taller externo" style="margin-bottom:16px;">
@@ -3146,7 +3146,7 @@ const COMPONENTES = {
   },
   hidraulico: {
     nombre: 'Sistema Hidráulico', icono: 'hidraulico',
-    estado: 'reparado', empresa: 'Taller interno Pucobre',
+    estado: 'reparado', empresa: 'Taller interno',
     fechaInstalacion: '15/01/2024', horometroInstalacion: 8050,
     historial: [
       { fecha: '15/01/2024', horometro: 8050, folio: 'INF-H002', detalle: 'Reemplazo de manguera de retorno por fuga activa.' },
@@ -3248,7 +3248,7 @@ function actualizarComponenteDesdeInforme(compKey, data, empresaTexto){
   if (!c) return;
   const horometroNum = parseHorometro(data.horometro);
   c.estado = 'reparado';
-  c.empresa = empresaTexto || 'Interno Pucobre';
+  c.empresa = empresaTexto || 'Taller interno';
   c.fechaInstalacion = data.fecha;
   if (horometroNum !== null) c.horometroInstalacion = horometroNum;
   c.historial.push({
@@ -3480,7 +3480,7 @@ function obtenerEmpresaSeleccionada(){
     const nombre = empresaExternoNombre.value.trim();
     return nombre || 'Proveedor externo (sin especificar)';
   }
-  return 'Interno Pucobre';
+  return 'Taller interno';
 }
 
 // ---- Campos obligatorios: horómetro, hora inicio, hora término ----
@@ -3615,7 +3615,7 @@ function construirInformeHTML(data){
     : '';
 
   return `
-    <img class="preview-logo" src="${logoSrc}" alt="Pucobre">
+    <img class="preview-logo" src="${logoSrc}" alt="TAGSENSE">
     <h2>Informe de Mantenimiento</h2>
     <div class="preview-meta">${escapeHtml(data.folio)} · ${escapeHtml(data.fecha)}</div>
     <div class="preview-grid">
@@ -3712,7 +3712,7 @@ btnPreviewInforme.addEventListener('click', () => {
   goTo('step-informe-preview');
 });
 
-// ---- Generar PDF con jsPDF (incluye logo Pucobre y firma) ----
+// ---- Generar PDF con jsPDF (incluye logo TAGSENSE y firma) ----
 function generarInformePdf(data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -3755,7 +3755,7 @@ function generarInformePdf(data){
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(...KHAKI);
-  doc.text('PUCOBRE', pageW - marginX, 11, { align: 'right' });
+  doc.text('TAGSENSE', pageW - marginX, 11, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(150, 148, 140);
@@ -3925,7 +3925,7 @@ function generarInformePdf(data){
   if (data.componente && COMPONENTES[data.componente]) {
     checkPageBreak(40);
     seccion('Componente intervenido');
-    parrafo(`${COMPONENTES[data.componente].nombre} · Empresa: ${data.empresa || 'Interno Pucobre'}`);
+    parrafo(`${COMPONENTES[data.componente].nombre} · Empresa: ${data.empresa || 'Taller interno'}`);
   }
 
   // ---------- 5. VERIFICACIÓN EN TERRENO ----------

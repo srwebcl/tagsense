@@ -269,7 +269,7 @@ const nfcCheck = document.getElementById('nfc-check');
 const nfcMainText = document.getElementById('nfc-main-text');
 
 const LOCK_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="1.6" stroke="#6f6d6a" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#6f6d6a" stroke-width="1.6"/></svg>';
-const SPIN_ICON = '<svg class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="#b3a57e" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const SPIN_ICON = '<svg class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="#D07838" stroke-width="2.2" stroke-linecap="round"/></svg>';
 
 // ---- Feedback háptico y sonoro al detectar componente ----
 function hapticPulse(){
@@ -514,6 +514,11 @@ const SUGERENCIAS_INICIALES = [
 ];
 
 let chatInitialized = false;
+// Se incrementa cada vez que se limpia el chat (iniciarChatNuevo) — la respuesta
+// demorada de enviarPregunta() guarda con qué generación arrancó y, si ya cambió
+// cuando el setTimeout dispara, no se pega una respuesta vieja a la conversación
+// nueva (pasaba si el técnico tocaba "+ Nuevo" mientras el bot seguía "escribiendo").
+let chatGeneracion = 0;
 
 function initChat(){
   if (chatInitialized) { chatMessages.scrollTop = chatMessages.scrollHeight; return; }
@@ -523,15 +528,47 @@ function initChat(){
   );
 }
 
+let toastTimeout = null;
+function mostrarToast(mensaje, duracion = 2500){
+  const el = document.getElementById('toast-notification');
+  if (!el) return;
+  el.textContent = mensaje;
+  el.classList.add('show');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    el.classList.remove('show');
+  }, duracion);
+}
+
 function iniciarChatNuevo(){
+  const teniaMensajes = chatMessages.querySelectorAll('.chat-bubble-row.user').length > 0;
+  chatGeneracion++;
   chatMessages.innerHTML = '';
   chatSuggestions.innerHTML = '';
   chatInput.value = '';
   chatSendBtn.disabled = true;
+  // Si el técnico estaba con scroll hacia abajo leyendo una respuesta, limpiar el
+  // chat sin volver arriba lo dejaba mirando una zona vacía — parecía que el botón
+  // no hacía nada.
+  window.scrollTo(0, 0);
   document.getElementById('symptom-grid').classList.remove('hidden');
   chatInitialized = false;
   initChat();
   hapticPulse();
+
+  // Feedback visual instantáneo para que se note la acción
+  const chatBox = document.getElementById('chat-messages');
+  if (chatBox) {
+    chatBox.style.animation = 'none';
+    void chatBox.offsetHeight;
+    chatBox.style.animation = 'fadeUp .25s ease';
+  }
+
+  if (teniaMensajes) {
+    mostrarToast('Conversación reiniciada. ¿En qué te puedo ayudar?');
+  } else {
+    mostrarToast('El asistente está listo para tu consulta');
+  }
 }
 document.getElementById('chat-new-btn').addEventListener('click', iniciarChatNuevo);
 
@@ -642,7 +679,11 @@ function enviarPregunta(texto){
 
   showTyping();
   const demoraMs = 550 + Math.random() * 500;
+  const generacionAlEnviar = chatGeneracion;
   setTimeout(() => {
+    // El chat se reinició (botón "+ Nuevo") mientras esta respuesta estaba
+    // "escribiendo" — no la pegamos a la conversación nueva.
+    if (chatGeneracion !== generacionAlEnviar) return;
     hideTyping();
     const match = buscarRespuesta(limpio);
     if (match) {
@@ -929,8 +970,20 @@ chatSendBtn.addEventListener('click', () => enviarPregunta(chatInput.value));
 
 
 // ---- Toggle de tema claro/oscuro ----
+// El wordmark oficial es marfil (claro) — invisible sobre el fondo claro del
+// tema light, así que se cambia por la variante oscura (logo-tagsense-dark.png)
+// cada vez que se alterna el tema.
+function actualizarLogosPorTema(){
+  const claro = document.body.classList.contains('theme-light');
+  document.querySelectorAll('[data-logo-themed]').forEach(img => {
+    img.src = claro
+      ? img.src.replace('logo-tagsense.png', 'logo-tagsense-dark.png')
+      : img.src.replace('logo-tagsense-dark.png', 'logo-tagsense.png');
+  });
+}
 document.getElementById('theme-toggle').addEventListener('click', () => {
   document.body.classList.toggle('theme-light');
+  actualizarLogosPorTema();
 });
 
 // ---- Toggle de modo terreno (alto contraste) ----
@@ -1152,7 +1205,7 @@ const TODOS_LOS_MANUALES = [
 const manualIndexList = document.getElementById('manual-index-list');
 manualIndexList.innerHTML = TODOS_LOS_MANUALES.map(m => `
   <div class="list-row" data-doc="${m.key}" role="button" tabindex="0" aria-label="Abrir ${escapeHtml(m.nombre)}">
-    <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="${m.icon}" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+    <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="${m.icon}" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
     <div class="li-txt"><strong>${escapeHtml(m.nombre)}</strong></div>
   </div>
 `).join('');
@@ -1172,7 +1225,7 @@ const INSTRUCTIVOS = {
   frenos: {
     nombre: 'Verificación Sistema de Frenos',
     meta: 'IT-FRE-001 · Frecuencia: cada 250 h',
-    icono: '<circle cx="12" cy="12" r="8" stroke="#b3a57e" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#b3a57e"/>',
+    icono: '<circle cx="12" cy="12" r="8" stroke="#D07838" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#D07838"/>',
     pasos: [
       { txt: 'Aplicar procedimiento LOTO antes de iniciar la verificación.', alerta: 'No omitir. Requisito de seguridad obligatorio.' },
       { txt: 'Medir espesor de pastilla en las 4 ruedas con pie de metro.', ref: 'Mínimo: 8 mm' },
@@ -1186,7 +1239,7 @@ const INSTRUCTIVOS = {
   hidraulico: {
     nombre: 'Verificación Sistema Hidráulico',
     meta: 'IT-HID-001 · Frecuencia: cada 250 h',
-    icono: '<path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#b3a57e" stroke-width="1.7" stroke-linejoin="round"/>',
+    icono: '<path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#D07838" stroke-width="1.7" stroke-linejoin="round"/>',
     pasos: [
       { txt: 'Posicionar la tolva completamente abajo y apagar el motor.', alerta: 'Esperar a que el sistema pierda presión residual.' },
       { txt: 'Verificar nivel de aceite hidráulico en la mirilla del estanque.', ref: 'Capacidad 180 L · ISO VG 46' },
@@ -1200,7 +1253,7 @@ const INSTRUCTIVOS = {
   neumaticos: {
     nombre: 'Verificación Presión de Neumáticos',
     meta: 'IT-NEU-001 · Frecuencia: diaria (pre-uso)',
-    icono: '<circle cx="12" cy="12" r="8" stroke="#b3a57e" stroke-width="1.7"/><circle cx="12" cy="12" r="3.2" stroke="#b3a57e" stroke-width="1.5"/>',
+    icono: '<circle cx="12" cy="12" r="8" stroke="#D07838" stroke-width="1.7"/><circle cx="12" cy="12" r="3.2" stroke="#D07838" stroke-width="1.5"/>',
     pasos: [
       { txt: 'Realizar la medición con los neumáticos fríos, antes de operar.', alerta: 'Medir en caliente da lecturas falsamente altas.' },
       { txt: 'Medir presión en los 6 neumáticos con manómetro calibrado.', ref: 'En carga: 620-650 kPa' },
@@ -1214,7 +1267,7 @@ const INSTRUCTIVOS = {
   tolva: {
     nombre: 'Verificación Estado de Tolva',
     meta: 'IT-TOL-001 · Frecuencia: cada 500 h',
-    icono: '<path d="M3 17h13l4-8H7L3 17Z" stroke="#b3a57e" stroke-width="1.7" stroke-linejoin="round"/>',
+    icono: '<path d="M3 17h13l4-8H7L3 17Z" stroke="#D07838" stroke-width="1.7" stroke-linejoin="round"/>',
     pasos: [
       { txt: 'Inspeccionar estructura de la tolva: grietas en soldaduras y refuerzos.', alerta: 'Toda grieta estructural debe reportarse de inmediato.' },
       { txt: 'Verificar desgaste del piso de la tolva y placas antidesgaste.' },
@@ -1228,7 +1281,7 @@ const INSTRUCTIVOS = {
   motor: {
     nombre: 'Verificación Motor y Refrigeración',
     meta: 'IT-MOT-001 · Frecuencia: cada 250 h',
-    icono: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/>',
+    icono: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/>',
     pasos: [
       { txt: 'Verificar nivel de refrigerante con el motor completamente frío.', alerta: 'Nunca abrir la tapa del radiador con el motor caliente.' },
       { txt: 'Inspeccionar el radiador: obstrucción por polvo o material particulado.', alerta: 'Condición frecuente en operaciones de rajo — limpiar si corresponde.' },
@@ -1340,7 +1393,7 @@ const COMPONENTES = {
   },
   hidraulico: {
     nombre: 'Sistema Hidráulico', icono: 'hidraulico',
-    estado: 'reparado', empresa: 'Taller interno Pucobre',
+    estado: 'reparado', empresa: 'Taller interno',
     fechaInstalacion: '15/01/2024', horometroInstalacion: 8050,
     historial: [
       { fecha: '15/01/2024', horometro: 8050, folio: 'INF-H002', detalle: 'Reemplazo de manguera de retorno por fuga activa.' },
@@ -1363,11 +1416,11 @@ const COMPONENTES = {
 };
 
 const COMP_ICONS = {
-  motor: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="16" r="1.6" stroke="#b3a57e" stroke-width="1.4"/><circle cx="15" cy="16" r="1.6" stroke="#b3a57e" stroke-width="1.4"/>',
-  transmision: '<circle cx="12" cy="12" r="3" stroke="#b3a57e" stroke-width="1.6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="#b3a57e" stroke-width="1.4" stroke-linecap="round"/>',
-  hidraulico: '<path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/>',
-  frenos: '<circle cx="12" cy="12" r="8" stroke="#b3a57e" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#b3a57e"/>',
-  mandos: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8l9 5 9-5M12 13v8" stroke="#b3a57e" stroke-width="1.6" stroke-linejoin="round"/>',
+  motor: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/><circle cx="15" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/>',
+  transmision: '<circle cx="12" cy="12" r="3" stroke="#D07838" stroke-width="1.6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="#D07838" stroke-width="1.4" stroke-linecap="round"/>',
+  hidraulico: '<path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/>',
+  frenos: '<circle cx="12" cy="12" r="8" stroke="#D07838" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#D07838"/>',
+  mandos: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8l9 5 9-5M12 13v8" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/>',
 };
 
 const ESTADO_LABELS = { original: 'Original', reparado: 'Reparado', reacondicionado: 'Reacondicionado', reemplazado: 'Reemplazado' };
@@ -1442,7 +1495,7 @@ function actualizarComponenteDesdeInforme(compKey, data, empresaTexto){
   if (!c) return;
   const horometroNum = parseHorometro(data.horometro);
   c.estado = 'reparado';
-  c.empresa = empresaTexto || 'Interno Pucobre';
+  c.empresa = empresaTexto || 'Taller interno';
   c.fechaInstalacion = data.fecha;
   if (horometroNum !== null) c.horometroInstalacion = horometroNum;
   c.historial.push({
@@ -1691,7 +1744,7 @@ function obtenerEmpresaSeleccionada(){
     const nombre = empresaExternoNombre.value.trim();
     return nombre || 'Proveedor externo (sin especificar)';
   }
-  return 'Interno Pucobre';
+  return 'Taller interno';
 }
 
 // ---- Campos obligatorios: horómetro, hora inicio, hora término ----
@@ -1818,7 +1871,9 @@ function validarInforme(){
 let ultimoInformeData = null;
 
 function construirInformeHTML(data){
-  const logoSrc = document.querySelector('#step-access .logo').src;
+  // Logo oscuro fijo, sin importar el tema activo en la app: la vista previa y
+  // el PDF siempre tienen fondo blanco, y el wordmark marfil quedaría invisible ahí.
+  const logoSrc = 'assets/img/logo-tagsense-dark.png';
   const sevLabel = { baja: 'Severidad: Baja', media: 'Severidad: Media', alta: 'Severidad: Alta' };
   const sevColor = { baja: '#177b57', media: '#eb912b', alta: '#c91233' };
   const fotosHtml = (data.fotos && data.fotos.length)
@@ -1826,7 +1881,7 @@ function construirInformeHTML(data){
     : '';
 
   return `
-    <img class="preview-logo" src="${logoSrc}" alt="Pucobre">
+    <img class="preview-logo" src="${logoSrc}" alt="TAGSENSE">
     <h2>Informe de Mantenimiento</h2>
     <div class="preview-meta">${escapeHtml(data.folio)} · ${escapeHtml(data.fecha)}</div>
     <div class="preview-grid">
@@ -1925,23 +1980,25 @@ btnPreviewInforme.addEventListener('click', () => {
   goTo('step-informe-preview');
 });
 
-// ---- Generar PDF con jsPDF (incluye logo Pucobre y firma) ----
+// ---- Generar PDF con jsPDF (incluye logo TAGSENSE y firma) ----
 function generarInformePdf(data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageW = 210, pageH = 297;
   const marginX = 18;
   const contentW = pageW - marginX * 2;
-  const KHAKI = [138, 123, 81];
-  const KHAKI_LIGHT = [221, 213, 195];
-  const KHAKI_PALE = [245, 243, 238];
-  const DARK = [20, 20, 22];
+  const COPPER = [208, 120, 56];       // Cobre industrial (#D07838)
+  const COPPER_LIGHT = [240, 136, 64]; // Naranja cobrizo (#F08840)
+  const IVORY_PALE = [245, 244, 234];  // Marfil claro (#F5F4EA)
+  const DARK = [23, 25, 26];           // Negro carbón (#17191A)
   const TEXT = [38, 38, 38];
-  const MUTED = [128, 128, 128];
+  const MUTED = [167, 167, 155];       // Gris mineral (#A7A79B)
   const RED = [201, 18, 51];
   const ORANGE = [235, 145, 43];
   const GREEN = [23, 123, 87];
   const RULE = [214, 210, 199];
+  const KHAKI = COPPER;
+  const KHAKI_PALE = IVORY_PALE;
 
   const docNum = `TAGSENSE-MT65S-${data.folio}`;
   let y = 0;
@@ -1950,11 +2007,12 @@ function generarInformePdf(data){
   // ---------- ENCABEZADO ----------
   doc.setFillColor(...DARK);
   doc.rect(0, 0, pageW, 26, 'F');
-  doc.setFillColor(...KHAKI);
+  doc.setFillColor(...COPPER);
   doc.rect(0, 26, pageW, 1.1, 'F');
 
-  const logoImg = document.querySelector('#step-access .logo');
-  try { doc.addImage(logoImg.src, 'PNG', marginX, 5.5, 15, 15); } catch(e) {}
+  // Logo claro fijo: el encabezado del PDF siempre se pinta con DARK de fondo
+  // (ver doc.rect arriba), sin importar el tema activo en la app.
+  try { doc.addImage('assets/img/logo-mark.png', 'PNG', marginX, 5.5, 15, 15); } catch(e) {}
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
@@ -1962,17 +2020,17 @@ function generarInformePdf(data){
   doc.text('INFORME DE MANTENIMIENTO', marginX + 20, 12.5);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...KHAKI_LIGHT);
+  doc.setTextColor(...COPPER_LIGHT);
   doc.text(`Documento técnico N° ${docNum}`, marginX + 20, 17.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.setTextColor(...KHAKI);
-  doc.text('PUCOBRE', pageW - marginX, 11, { align: 'right' });
+  doc.setTextColor(...COPPER);
+  doc.text('TAGSENSE', pageW - marginX, 11, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(150, 148, 140);
-  doc.text('TAGSENSE · Plataforma de activos mineros', pageW - marginX, 15, { align: 'right' });
+  doc.text('Plataforma de activos industriales', pageW - marginX, 15, { align: 'right' });
 
   // ---------- FRANJA DE CONTROL DOCUMENTAL ----------
   y = 32;
@@ -2138,7 +2196,7 @@ function generarInformePdf(data){
   if (data.componente && COMPONENTES[data.componente]) {
     checkPageBreak(40);
     seccion('Componente intervenido');
-    parrafo(`${COMPONENTES[data.componente].nombre} · Empresa: ${data.empresa || 'Interno Pucobre'}`);
+    parrafo(`${COMPONENTES[data.componente].nombre} · Empresa: ${data.empresa || 'Taller interno'}`);
   }
 
   // ---------- 5. VERIFICACIÓN EN TERRENO ----------
@@ -2495,8 +2553,8 @@ function mapearIntervencionAInforme(item){
 }
 
 function iconoHistorial(operativo){
-  if (operativo === false) return '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="#b3a57e" stroke-width="1.6" stroke-linecap="round"/></svg>';
-  return '<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3 3 0 0 1-3.9 3.9L4 17v3h3l6.8-6.8a3 3 0 0 1 3.9-3.9l-2 2-1.4-1.4z" stroke="#b3a57e" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+  if (operativo === false) return '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="#D07838" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  return '<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a3 3 0 0 1-3.9 3.9L4 17v3h3l6.8-6.8a3 3 0 0 1 3.9-3.9l-2 2-1.4-1.4z" stroke="#D07838" stroke-width="1.5" stroke-linejoin="round"/></svg>';
 }
 
 function badgeHistorial(operativo){
@@ -2878,7 +2936,7 @@ function actualizarEstadoConexion(){
   } else {
     offlineBanner.textContent = 'Sin conexión — modo offline activo';
     offlineBanner.style.background = 'var(--warn-color)';
-    offlineBanner.style.color = '#1a0f05';
+    offlineBanner.style.color = '#17191A';
     offlineBanner.classList.add('show');
   }
 }

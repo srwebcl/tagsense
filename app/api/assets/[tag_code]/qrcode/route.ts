@@ -28,7 +28,7 @@ export async function GET(
     type: "png",
     width: 640,
     margin: 2,
-    color: { dark: "#0a0a0b", light: "#ffffff" },
+    color: { dark: "#17191A", light: "#ffffff" },
   });
 
   const download = new URL(request.url).searchParams.get("download") === "1";

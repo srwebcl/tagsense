@@ -37,10 +37,7 @@ export default function AdminLoginPage() {
     <div className="admin-login-wrap">
       <div className="admin-login-card">
         <div className="admin-login-brand">
-          <img src="/assets/img/logo-mark.png" alt="TAGSENSE" />
-          <h1>
-            TAG<b>SENSE</b>
-          </h1>
+          <img src="/assets/img/logo-tagsense.png" alt="TAGSENSE" style={{ width: 190, height: "auto", margin: "0 auto 16px", display: "block" }} />
           <p>Panel de administración</p>
         </div>
 

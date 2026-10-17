@@ -3,23 +3,35 @@
    marca en vez de dos productos distintos. */
 
 :root{
-  --bg-0:#0a0a0b;
-  --bg-1:#141416;
-  --graphite:#232326;
-  --graphite-line:#2c2c30;
-  --copper-1:#b3a57e;
-  --copper-2:#8a7b51;
-  --text-hi:#f4f1ec;
-  --text-mid:#a8a6a2;
-  --text-low:#84817b;
-  --ok:#177b57;
-  --err:#c91233;
-  --warn-color:#eb912b;
+  /* Colores corporativos TAGSENSE (Manual Oficial) */
+  --color-primary: #17191A;        /* Negro carbón */
+  --color-secondary: #E8E8D8;      /* Marfil tecnológico */
+  --color-accent: #D07838;         /* Cobre industrial */
+  --color-accent-bright: #F08840;  /* Naranja cobrizo */
+
+  /* Colores complementarios */
+  --color-graphite-brown: #241D16; /* Marrón grafito */
+  --color-industrial-gray: #343638;/* Gris industrial */
+  --color-mineral-gray: #A7A79B;   /* Gris mineral */
+  --color-ivory-light: #F5F4EA;    /* Marfil claro */
+
+  --bg-0: #17191A;
+  --bg-1: #241D16;
+  --graphite: #241D16;
+  --graphite-line: #343638;
+  --copper-1: #D07838;
+  --copper-2: #F08840;
+  --text-hi: #E8E8D8;
+  --text-mid: #A7A79B;
+  --text-low: #7A7A70;
+  --ok: #177b57;
+  --err: #c91233;
+  --warn-color: #eb912b;
 }
 
 .admin-root{
   min-height:100vh;
-  background:radial-gradient(1200px 700px at 50% -10%, #1a1a1d 0%, var(--bg-0) 55%);
+  background:radial-gradient(1200px 700px at 50% -10%, #241D16 0%, var(--bg-0) 55%);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,Roboto,sans-serif;
   color:var(--text-hi);
 }
@@ -28,7 +40,7 @@
 .admin-topbar{
   display:flex; align-items:center; justify-content:space-between;
   padding:16px 24px; border-bottom:1px solid var(--graphite-line);
-  background:rgba(10,10,11,0.6); backdrop-filter:blur(6px);
+  background:rgba(23,25,26,0.6); backdrop-filter:blur(6px);
   position:sticky; top:0; z-index:10;
 }
 .admin-brand{ display:flex; align-items:center; gap:10px; text-decoration:none; }
@@ -95,7 +107,7 @@
   font-size:12.5px; font-weight:700; color:var(--text-mid); cursor:pointer;
   text-transform:none; letter-spacing:0; transition:all .15s ease;
 }
-.chip-group input:checked + label{ border-color:var(--copper-2); color:var(--text-hi); background:rgba(179,165,126,0.12); }
+.chip-group input:checked + label{ border-color:var(--copper-2); color:var(--text-hi); background:rgba(208,120,56,0.12); }
 .chip-group .dot{ width:7px; height:7px; border-radius:50%; background:var(--text-low); }
 .chip-group input:checked + label .dot.ok{ background:var(--ok); }
 .chip-group input:checked + label .dot.warn{ background:var(--warn-color); }
@@ -106,9 +118,9 @@
   width:100%; height:52px; border-radius:14px; border:none;
   font-size:14.5px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
   display:flex; align-items:center; justify-content:center; gap:10px;
-  cursor:pointer; color:#1a0f05;
+  cursor:pointer; color:#17191A;
   background:linear-gradient(135deg, var(--copper-1) 0%, var(--copper-2) 100%);
-  box-shadow:0 8px 20px -6px rgba(138,123,81,0.55);
+  box-shadow:0 8px 20px -6px rgba(208,120,56,0.45);
   transition:transform .12s ease, opacity .15s ease;
 }
 .btn:active{ transform:scale(0.98); }
@@ -120,7 +132,7 @@
   font-size:12.5px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase;
   cursor:pointer; text-decoration:none;
 }
-.btn-outline:hover{ background:rgba(179,165,126,0.08); }
+.btn-outline:hover{ background:rgba(208,120,56,0.08); }
 .btn-danger{
   display:inline-flex; align-items:center; gap:8px; width:auto;
   height:42px; padding:0 18px; border-radius:12px;
@@ -193,7 +205,7 @@
 .doc-list{ display:flex; flex-direction:column; gap:1px; margin-bottom:24px; border-radius:14px; overflow:hidden; border:1px solid var(--graphite-line); }
 .doc-row{ display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--graphite); }
 .doc-row .ic{
-  width:36px; height:36px; border-radius:9px; background:rgba(179,165,126,0.12);
+  width:36px; height:36px; border-radius:9px; background:rgba(208,120,56,0.12);
   display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--copper-1);
 }
 .doc-row .txt{ flex:1; min-width:0; }
@@ -220,7 +232,7 @@
 }
 .dropzone:hover{ border-color:var(--copper-2); }
 .dropzone .ic{
-  width:40px; height:40px; border-radius:10px; background:rgba(179,165,126,0.12);
+  width:40px; height:40px; border-radius:10px; background:rgba(208,120,56,0.12);
   display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--copper-1);
 }
 .dropzone .txt{ flex:1; min-width:0; }
@@ -236,4 +248,4 @@
 }
 
 @keyframes spin{ to{ transform:rotate(360deg); } }
-.btn-spin{ width:16px; height:16px; border-radius:50%; border:2px solid rgba(26,15,5,0.3); border-top-color:#1a0f05; animation:spin .6s linear infinite; }
+.btn-spin{ width:16px; height:16px; border-radius:50%; border:2px solid rgba(23,25,26,0.3); border-top-color:#17191A; animation:spin .6s linear infinite; }

@@ -1,8 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Colores corporativos TAGSENSE */
+  --color-primary: #17191A;
+  --color-secondary: #E8E8D8;
+  --color-accent: #D07838;
+  --color-accent-bright: #F08840;
+
+  /* Colores complementarios */
+  --color-graphite-brown: #241D16;
+  --color-industrial-gray: #343638;
+  --color-mineral-gray: #A7A79B;
+  --color-ivory-light: #F5F4EA;
+
+  /* Aplicación en la interfaz */
+  --background: var(--color-primary);
+  --foreground: var(--color-secondary);
+  --button-background: var(--color-accent);
+  --button-foreground: var(--color-primary);
+  --border-color: var(--color-industrial-gray);
 }
 
 @theme inline {
@@ -10,13 +26,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

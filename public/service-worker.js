@@ -2,7 +2,7 @@
 
 // Subir este número obliga a los dispositivos ya instalados a descargar la nueva versión
 // y purgar la caché anterior (ver evento 'activate').
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 
 // Todo lo que la app necesita para funcionar sin conexión, incluido el primer arranque offline.
@@ -12,11 +12,13 @@ const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 // './index.html' directamente, sin pasar por una respuesta redirigida cacheada.
 const PRECACHE_URLS = [
   './index.html',
+  './favicon.ico',
   './manifest.json',
   './assets/css/styles.css',
   './assets/js/app.js',
   './assets/img/logo-mark.png',
-  './assets/img/logo-wide.png',
+  './assets/img/logo-tagsense.png',
+  './assets/img/logo-tagsense-dark.png',
   './assets/img/truck-mt65s.png',
   './assets/img/plano-hidraulico.png',
   './assets/icons/icon-192.png',
