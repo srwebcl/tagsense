@@ -13,14 +13,18 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "15mb",
     },
   },
-  async redirects() {
+  // rewrite (no redirect): la URL se queda en "/" — el visitante nunca ve
+  // ".html" en la barra de direcciones. La app de campo (PWA) sigue siendo el
+  // index.html estático en /public, a propósito: tiene que funcionar 100% sin
+  // conexión (técnico dentro de una mina sin señal) y un app shell estático
+  // precacheado por el service worker es la forma más simple y confiable de
+  // garantizar eso — no se reescribió como página de React y no va a
+  // reescribirse por uniformidad con el admin (ver análisis de arquitectura).
+  async rewrites() {
     return [
       {
-        // La app de campo (PWA) sigue siendo el index.html estático en /public —
-        // no se reescribió como página de React todavía (ver plan de migración).
         source: "/",
         destination: "/index.html",
-        permanent: false,
       },
     ];
   },

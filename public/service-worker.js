@@ -2,15 +2,15 @@
 
 // Subir este número obliga a los dispositivos ya instalados a descargar la nueva versión
 // y purgar la caché anterior (ver evento 'activate').
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 
 // Todo lo que la app necesita para funcionar sin conexión, incluido el primer arranque offline.
-// OJO: no se precachea './' — Next.js lo redirige (307) a './index.html', y Chromium rechaza
-// con net::ERR_FAILED cualquier respuesta marcada como "redirected" servida vía respondWith()
-// a una navegación. El fallback de más abajo (request.mode === 'navigate') ya cubre '/' sirviendo
-// './index.html' directamente, sin pasar por una respuesta redirigida cacheada.
+// './' ya se puede precachear directamente: next.config.ts sirve index.html en "/" vía
+// rewrite (no redirect), así que la respuesta no viene marcada como "redirected" y
+// Chromium la acepta sin problema vía respondWith() en una navegación.
 const PRECACHE_URLS = [
+  './',
   './index.html',
   './favicon.ico',
   './manifest.json',
@@ -66,7 +66,7 @@ self.addEventListener('fetch', (event) => {
         .then((networkResponse) => {
           // Nunca cachear una respuesta redirigida bajo la URL original: Chromium rechaza
           // (net::ERR_FAILED) servir una respuesta "redirected" vía respondWith() a una
-          // navegación. '/' cae en este caso porque Next.js la redirige a '/index.html'.
+          // navegación (ej. si algún día se agrega un redirect real a alguna ruta).
           if (networkResponse && networkResponse.ok && !networkResponse.redirected) {
             const clone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
