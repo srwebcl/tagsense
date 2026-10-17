@@ -237,6 +237,7 @@
   cursor:pointer; transition:border-color .15s ease;
 }
 .dropzone:hover{ border-color:var(--copper-2); }
+.dropzone-active{ border-color:var(--copper-1); background:rgba(208,120,56,0.08); }
 .dropzone .ic{
   width:40px; height:40px; border-radius:10px; background:rgba(208,120,56,0.12);
   display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--copper-1);
