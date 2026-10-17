@@ -32,7 +32,7 @@ export const GET = withErrorLogging("public/assets/:tag_code", async (
   // desambiguar (ej. prefijo de tag_code por cliente) antes de que lo sea.
   const result = await pool.query(
     `select tag_code, name, model, serial_number, status, location, hour_meter,
-            asset_type, manufacturer, manufacture_year, photo_url
+            asset_type, manufacturer, manufacture_year, photo_url, specs
      from assets
      where tag_code = $1
      limit 1`,

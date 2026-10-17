@@ -117,6 +117,41 @@ export default async function NewAssetPage() {
             </div>
 
             <div className="field">
+              <label>País de fabricación</label>
+              <div className="input-wrap">
+                <input name="specs_country_of_origin" placeholder="Suecia" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Peso operacional</label>
+              <div className="input-wrap">
+                <input name="specs_operating_weight" placeholder="62.000 kg" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Capacidad de carga</label>
+              <div className="input-wrap">
+                <input name="specs_load_capacity" placeholder="65 toneladas" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Tipo de motor</label>
+              <div className="input-wrap">
+                <input name="specs_engine_type" placeholder="Diésel" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Potencia</label>
+              <div className="input-wrap">
+                <input name="specs_power" placeholder="390 kW (523 HP)" />
+              </div>
+            </div>
+
+            <div className="field">
               <label>Ubicación</label>
               <div className="input-wrap">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

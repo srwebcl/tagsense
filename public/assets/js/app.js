@@ -70,6 +70,26 @@ function aplicarActivo(id){
     const cls = claseEstado(a.estado);
     if (cls) banner.classList.add(cls);
   }
+
+  // Tarjeta "ID TagSense" — se repite igual en Info General, Historial,
+  // Manuales y Componentes (ver public/index.html).
+  document.querySelectorAll('[data-bind="tag-code"]').forEach(el => { el.textContent = id; });
+
+  // Pantalla "Información General" — antes mostraba datos de demo fijos
+  // (Epiroc/MT65S/Suecia) para cualquier equipo. specs es jsonb freeform
+  // (ver 0005_asset_fields.sql) y puede venir vacío si el admin no lo completó
+  // al crear el activo — por eso usa setFilaOpcional, no setText.
+  const specs = a.specs || {};
+  setText('ig-serie', a.serie);
+  setText('ig-anio', a.anio);
+  setFilaOpcional('ig-tipo-row', 'ig-tipo', a.tipo);
+  setFilaOpcional('ig-fabricante-row', 'ig-fabricante', a.fabricante);
+  setFilaOpcional('ig-modelo-row', 'ig-modelo', a.modelo);
+  setFilaOpcional('ig-pais-row', 'ig-pais', specs.country_of_origin);
+  setFilaOpcional('ig-peso-row', 'ig-peso', specs.operating_weight);
+  setFilaOpcional('ig-capacidad-row', 'ig-capacidad', specs.load_capacity);
+  setFilaOpcional('ig-motor-row', 'ig-motor', specs.engine_type);
+  setFilaOpcional('ig-potencia-row', 'ig-potencia', specs.power);
 }
 
 // ---- Apertura directa por tag NFC (URL con ?activo=ID) ----
@@ -1362,7 +1382,7 @@ function renderSMList(){
         </div>
         <span class="sm-prioridad ${PRIORIDAD_CLASE[sm.prioridad] || ''}">${escapeHtml(sm.prioridad)}</span>
       </div>
-      <div class="sm-tipo"><b>${escapeHtml(sm.tipo)}</b>${sm.componente && COMPONENTES[sm.componente] ? ' · ' + escapeHtml(COMPONENTES[sm.componente].nombre) : ''}</div>
+      <div class="sm-tipo"><b>${escapeHtml(sm.tipo)}</b>${sm.componente && COMPONENTE_META[sm.componente] ? ' · ' + escapeHtml(COMPONENTE_META[sm.componente].nombre) : ''}</div>
       <div class="sm-desc">${escapeHtml(sm.descripcion || 'Sin detalle adicional.')}</div>
       <div class="sm-card-bottom">
         <span class="sm-estado ${sm.estado === 'Resuelta' ? 'resuelta' : ''}">${escapeHtml(sm.estado)}</span>
@@ -1450,45 +1470,50 @@ document.getElementById('tile-solicitudes').addEventListener('click', () => {
 });
 document.getElementById('back-solicitudes').addEventListener('click', () => goTo('step-confirm-3'));
 
+// Botón "Copiar ID del equipo" — se repite en 4 pantallas (ver data-copy-id
+// en public/index.html), delegado en document porque todas comparten markup.
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-copy-id]');
+  if (!btn || !activoActualId) return;
+  navigator.clipboard.writeText(activoActualId)
+    .then(() => mostrarToast('ID copiado al portapapeles'))
+    .catch(() => mostrarToast('No se pudo copiar el ID'));
+});
+
 // ================= COMPONENTES CRÍTICOS (ficha de vida por pieza) =================
 // Se auto-completan con lo que el técnico registra en cada Informe de Mantenimiento —
 // no se editan a mano en esta pantalla.
-const COMPONENTES = {
-  motor: {
-    nombre: 'Motor', icono: 'motor',
-    estado: 'original', empresa: null,
-    fechaInstalacion: '15/03/2021', horometroInstalacion: 0,
-    historial: [],
-  },
-  transmision: {
-    nombre: 'Transmisión', icono: 'transmision',
-    estado: 'original', empresa: null,
-    fechaInstalacion: '15/03/2021', horometroInstalacion: 0,
-    historial: [],
-  },
-  hidraulico: {
-    nombre: 'Sistema Hidráulico', icono: 'hidraulico',
-    estado: 'reparado', empresa: 'Taller interno',
-    fechaInstalacion: '15/01/2024', horometroInstalacion: 8050,
-    historial: [
-      { fecha: '15/01/2024', horometro: 8050, folio: 'INF-H002', detalle: 'Reemplazo de manguera de retorno por fuga activa.' },
-    ],
-  },
-  frenos: {
-    nombre: 'Frenos', icono: 'frenos',
-    estado: 'original', empresa: null,
-    fechaInstalacion: '15/03/2021', horometroInstalacion: 0,
-    historial: [
-      { fecha: '28/03/2024', horometro: 8420, folio: 'INF-H003', detalle: 'Inspección: pastilla delantera izquierda con desgaste cercano al mínimo. Pendiente reemplazo.' },
-    ],
-  },
-  mandos: {
-    nombre: 'Mandos Finales', icono: 'mandos',
-    estado: 'original', empresa: null,
-    fechaInstalacion: '15/03/2021', horometroInstalacion: 0,
-    historial: [],
-  },
+//
+// Cacheado por activo (no hay tabla `components` en el backend todavía — ver
+// auditoría pre-lanzamiento — así que esto sigue siendo solo caché de sesión,
+// se pierde al recargar la página). Antes era un único objeto global: escanear
+// un segundo activo real mostraba el historial de reparaciones del primero
+// como si fuera del segundo. Cada activo ahora arranca con su propia ficha en
+// blanco (sin historial ni fecha de instalación inventada).
+// Metadata estática (nombre/ícono no cambian según el activo) — separada del
+// estado mutable (estado/empresa/historial), que sí es por activo.
+const COMPONENTE_META = {
+  motor: { nombre: 'Motor', icono: 'motor' },
+  transmision: { nombre: 'Transmisión', icono: 'transmision' },
+  hidraulico: { nombre: 'Sistema Hidráulico', icono: 'hidraulico' },
+  frenos: { nombre: 'Frenos', icono: 'frenos' },
+  mandos: { nombre: 'Mandos Finales', icono: 'mandos' },
 };
+
+const COMPONENTES_POR_ACTIVO = {};
+
+function crearComponentesIniciales(){
+  const estado = {};
+  for (const key of Object.keys(COMPONENTE_META)) {
+    estado[key] = { estado: 'original', empresa: null, fechaInstalacion: null, horometroInstalacion: 0, historial: [] };
+  }
+  return estado;
+}
+
+function getComponentesActivo(id){
+  if (!COMPONENTES_POR_ACTIVO[id]) COMPONENTES_POR_ACTIVO[id] = crearComponentesIniciales();
+  return COMPONENTES_POR_ACTIVO[id];
+}
 
 const COMP_ICONS = {
   motor: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/><circle cx="15" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/>',
@@ -1509,16 +1534,19 @@ function parseHorometro(str){
 function renderComponentes(){
   const container = document.getElementById('comp-criticos-list');
   if (!container) return;
+  if (!activoActualId) { container.innerHTML = ''; return; }
   const horometroActual = parseHorometro(ultimoHorometro[activoActualId]) || 0;
   const UMBRAL_ALERTA_HORAS = 4000; // referencia: sobre esto, sugerir revisión preventiva
 
-  container.innerHTML = Object.entries(COMPONENTES).map(([key, c]) => {
+  container.innerHTML = Object.entries(getComponentesActivo(activoActualId)).map(([key, c]) => {
+    const meta = COMPONENTE_META[key];
+    const fechaTexto = c.fechaInstalacion ? escapeHtml(c.fechaInstalacion) : 'fecha no registrada';
     const horas = Math.max(0, Math.round(horometroActual - c.horometroInstalacion));
     const enAlerta = horas >= UMBRAL_ALERTA_HORAS;
     const smAbierta = solicitudesCache.find(s => s.componente === key && s.estado === 'Abierta');
     const origenTexto = c.empresa
-      ? `Reparado — ${escapeHtml(c.empresa)}, ${escapeHtml(c.fechaInstalacion)}`
-      : `Componente de fábrica, instalado ${escapeHtml(c.fechaInstalacion)}`;
+      ? `Reparado — ${escapeHtml(c.empresa)}, ${fechaTexto}`
+      : `Componente de fábrica, instalado ${fechaTexto}`;
     const historialHtml = c.historial.length
       ? c.historial.slice().reverse().map(h =>
           `<div class="comp-hist-item"><b>${escapeHtml(h.fecha)}</b> · ${escapeHtml(String(h.horometro))}h · ${escapeHtml(h.folio)}<br>${escapeHtml(h.detalle)}${h.empresa ? `<br><span style="color:var(--text-low);">${escapeHtml(h.empresa)}${h.tecnico ? ' · Téc. ' + escapeHtml(h.tecnico) : ''}</span>` : ''}</div>`
@@ -1528,9 +1556,9 @@ function renderComponentes(){
     return `
       <div class="comp-card" id="comp-card-${key}">
         <div class="comp-card-head" data-toggle="${key}" role="button" tabindex="0">
-          <div class="comp-ic"><svg viewBox="0 0 24 24" fill="none">${COMP_ICONS[c.icono]}</svg></div>
+          <div class="comp-ic"><svg viewBox="0 0 24 24" fill="none">${COMP_ICONS[meta.icono]}</svg></div>
           <div class="comp-head-txt">
-            <strong>${escapeHtml(c.nombre)}</strong>
+            <strong>${escapeHtml(meta.nombre)}</strong>
             <div class="comp-head-horas ${enAlerta ? 'alerta' : ''}">
               ${enAlerta ? '<svg viewBox="0 0 24 24" fill="none" class="alerta-ic"><path d="M12 2 2 20h20L12 2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' : ''}
               <b>${horas.toLocaleString('es-CL')}</b> horas acumuladas
@@ -1544,7 +1572,7 @@ function renderComponentes(){
           ${enAlerta ? '<div class="comp-alerta-banner">Esta pieza supera las ' + UMBRAL_ALERTA_HORAS.toLocaleString('es-CL') + ' horas de uso — se sugiere programar una revisión preventiva.</div>' : ''}
           <div class="comp-detail-grid">
             <div style="grid-column:1 / -1;"><span class="dk">Origen</span><span class="dv">${origenTexto}</span></div>
-            <div><span class="dk">Fecha instalación</span><span class="dv">${escapeHtml(c.fechaInstalacion)}</span></div>
+            <div><span class="dk">Fecha instalación</span><span class="dv">${fechaTexto}</span></div>
             <div><span class="dk">Horómetro instalación</span><span class="dv">${c.horometroInstalacion.toLocaleString('es-CL')} h</span></div>
           </div>
           <div class="comp-hist-label">Historial de intervenciones</div>
@@ -1566,7 +1594,7 @@ function renderComponentes(){
 
 // Actualiza la ficha de vida del componente cuando se genera un informe que lo interviene
 function actualizarComponenteDesdeInforme(compKey, data, empresaTexto){
-  const c = COMPONENTES[compKey];
+  const c = getComponentesActivo(activoActualId)[compKey];
   if (!c) return;
   const horometroNum = parseHorometro(data.horometro);
   c.estado = 'reparado';
@@ -1979,7 +2007,7 @@ function construirInformeHTML(data){
     <div class="preview-h">Instructivos de verificación</div>
     <div class="preview-p">${data.instructivosUsados && data.instructivosNombres.length ? data.instructivosNombres.map(n => '• ' + escapeHtml(n)).join('<br>') : 'No se utilizaron instructivos'}</div>
     ${data.alcances ? `<div class="preview-h">Alcances técnicos del mantenedor</div><p class="preview-p">${escapeHtml(data.alcances)}</p>` : ''}
-    ${data.smAplica ? `<div class="preview-h">Solicitud de Mantenimiento</div><p class="preview-p"><b>${escapeHtml(data.smFolio || 'SM')}</b> · ${escapeHtml(data.smTipo || '')} · Prioridad ${escapeHtml(data.smPrioridad || '')}${data.smComponente && COMPONENTES[data.smComponente] ? ' · ' + escapeHtml(COMPONENTES[data.smComponente].nombre) : ''}<br>${escapeHtml(data.smDescripcion || '')}</p>` : ''}
+    ${data.smAplica ? `<div class="preview-h">Solicitud de Mantenimiento</div><p class="preview-p"><b>${escapeHtml(data.smFolio || 'SM')}</b> · ${escapeHtml(data.smTipo || '')} · Prioridad ${escapeHtml(data.smPrioridad || '')}${data.smComponente && COMPONENTE_META[data.smComponente] ? ' · ' + escapeHtml(COMPONENTE_META[data.smComponente].nombre) : ''}<br>${escapeHtml(data.smDescripcion || '')}</p>` : ''}
     ${data.observaciones ? `<div class="preview-h">Recomendaciones</div><p class="preview-p">${escapeHtml(data.observaciones)}</p>` : ''}
     ${fotosHtml}
     <div class="preview-h">Firma del técnico</div>
@@ -2272,10 +2300,10 @@ function generarInformePdf(data){
   }
 
   // ---------- 4. COMPONENTE INTERVENIDO ----------
-  if (data.componente && COMPONENTES[data.componente]) {
+  if (data.componente && COMPONENTE_META[data.componente]) {
     checkPageBreak(40);
     seccion('Componente intervenido');
-    parrafo(`${COMPONENTES[data.componente].nombre} · Empresa: ${data.empresa || 'Taller interno'}`);
+    parrafo(`${COMPONENTE_META[data.componente].nombre} · Empresa: ${data.empresa || 'Taller interno'}`);
   }
 
   // ---------- 5. VERIFICACIÓN EN TERRENO ----------
@@ -2311,7 +2339,7 @@ function generarInformePdf(data){
   if (data.smAplica) {
     checkPageBreak(55);
     seccion('Solicitud de mantenimiento generada');
-    const compNombre = data.smComponente && COMPONENTES[data.smComponente] ? COMPONENTES[data.smComponente].nombre : '—';
+    const compNombre = data.smComponente && COMPONENTE_META[data.smComponente] ? COMPONENTE_META[data.smComponente].nombre : '—';
     const PR_COLOR = { 'Baja': GREEN, 'Media': ORANGE, 'Alta': RED, 'Urgente': RED };
     const prColor = PR_COLOR[data.smPrioridad] || KHAKI;
 
@@ -2433,21 +2461,82 @@ function calcularDuracion(hi, ht){
   return `${hh}h ${mm}min`;
 }
 
+// ================= COLA OFFLINE DE INFORMES =================
+// Antes, si /api/interventions o /api/reports fallaban (sin conexión, servidor
+// caído), el informe se perdía por completo salvo el PDF ya descargado —
+// contradice la promesa "offline-first" para el flujo exacto que existe para
+// servir (mantenimiento de campo en zonas sin señal). Esto guarda el informe
+// en IndexedDB de este dispositivo y reintenta solo cuando vuelve la conexión.
+const OFFLINE_DB_NAME = 'tagsense-offline';
+const OFFLINE_DB_VERSION = 1;
+const OFFLINE_STORE = 'informes-pendientes';
+
+function abrirOfflineDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(OFFLINE_STORE)) db.createObjectStore(OFFLINE_STORE, { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function encolarInformePendiente(registro){
+  const db = await abrirOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+    tx.objectStore(OFFLINE_STORE).put(registro);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function listarInformesPendientes(){
+  const db = await abrirOfflineDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(OFFLINE_STORE, 'readonly').objectStore(OFFLINE_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function eliminarInformePendiente(id){
+  const db = await abrirOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+    tx.objectStore(OFFLINE_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function contarInformesPendientes(){
+  try { return (await listarInformesPendientes()).length; } catch { return 0; }
+}
+
+async function actualizarBadgePendientes(){
+  const badge = document.getElementById('pending-sync-badge');
+  const countEl = document.getElementById('pending-sync-count');
+  if (!badge || !countEl) return;
+  const n = await contarInformesPendientes();
+  countEl.textContent = String(n);
+  badge.classList.toggle('hidden', n === 0);
+}
+
 // ================= PERSISTENCIA DEL INFORME (backend real) =================
 // El PDF se sigue generando en el navegador (jsPDF) — se queda offline-first,
-// nunca bloqueado por la red (ver skill offline-sync). Guardar en el backend es
-// "mejor esfuerzo": si falla o no hay conexión, el técnico igual se lleva su PDF,
-// y se avisa con un hint no bloqueante en vez de fallar en silencio.
-async function guardarInformeEnBackend(data, pdfDoc){
-  const hintEl = document.getElementById('informe-sync-hint');
-  const mostrarHint = (texto) => { if (hintEl) { hintEl.textContent = texto; hintEl.classList.remove('hidden'); } };
+// nunca bloqueado por la red (ver skill offline-sync).
+//
+// intentarSubirInforme hace los dos POST (intervención + PDF) y reporta en qué
+// etapa falló. Si interventionIdExistente viene seteado, se salta la creación
+// de la intervención — necesario para reintentar sin crear un registro
+// duplicado cuando ya se creó la intervención pero solo falló la subida del PDF.
+async function intentarSubirInforme(data, pdfBlob, interventionIdExistente){
+  let interventionId = interventionIdExistente || null;
 
-  if (!navigator.onLine) {
-    mostrarHint('Informe generado localmente. Se guardará en el servidor cuando vuelva la conexión.');
-    return;
-  }
-
-  try {
+  if (!interventionId) {
     // 'fecha' viene en formato es-CL (DD-MM-YYYY) para mostrarse — no sirve para
     // construir un Date, por eso se usa fechaISO (ver report-fab arriba).
     const fechaBase = data.fechaISO || new Date().toISOString().slice(0, 10);
@@ -2478,21 +2567,99 @@ async function guardarInformeEnBackend(data, pdfDoc){
         },
       }),
     });
-    if (!intervencionResp.ok) { mostrarHint('No se pudo guardar el informe en el servidor. El PDF se descargó igual.'); return; }
+    if (!intervencionResp.ok) return { ok: false, etapa: 'intervencion' };
     const intervencion = await intervencionResp.json();
+    interventionId = intervencion.id;
+  }
 
-    const form = new FormData();
-    form.append('intervention_id', intervencion.id);
-    form.append('folio', data.folio);
-    form.append('file', pdfDoc.output('blob'), `${data.folio}_${data.equipoId}.pdf`);
-    const reporteResp = await fetch('/api/reports', { method: 'POST', body: form });
-    if (!reporteResp.ok) { mostrarHint('El informe se registró, pero el PDF no se pudo subir al servidor.'); return; }
+  const form = new FormData();
+  form.append('intervention_id', interventionId);
+  form.append('folio', data.folio);
+  form.append('file', pdfBlob, `${data.folio}_${data.equipoId}.pdf`);
+  const reporteResp = await fetch('/api/reports', { method: 'POST', body: form });
+  if (!reporteResp.ok) return { ok: false, etapa: 'reporte', interventionId };
 
-    mostrarHint('Informe guardado en el servidor.');
+  return { ok: true };
+}
+
+async function guardarInformeEnBackend(data, pdfDoc){
+  const hintEl = document.getElementById('informe-sync-hint');
+  const mostrarHint = (texto) => { if (hintEl) { hintEl.textContent = texto; hintEl.classList.remove('hidden'); } };
+  const pdfBlob = pdfDoc.output('blob');
+  const idCola = `${data.folio}-${Date.now()}`;
+
+  const encolarYAvisar = async (interventionId, texto) => {
+    await encolarInformePendiente({ id: idCola, data, pdfBlob, interventionId: interventionId || null, creadoEn: Date.now() });
+    mostrarHint(texto);
+    actualizarBadgePendientes();
+  };
+
+  if (!navigator.onLine) {
+    await encolarYAvisar(null, 'Sin conexión — el informe se guardó en este dispositivo y se subirá automáticamente cuando vuelva la señal.');
+    return;
+  }
+
+  try {
+    const resultado = await intentarSubirInforme(data, pdfBlob);
+    if (resultado.ok) { mostrarHint('Informe guardado en el servidor.'); return; }
+    if (resultado.etapa === 'reporte') {
+      await encolarYAvisar(resultado.interventionId, 'El informe se registró, pero el PDF no se pudo subir — se reintentará automáticamente.');
+    } else {
+      await encolarYAvisar(null, 'No se pudo guardar el informe en el servidor. Se guardó en este dispositivo y se reintentará automáticamente.');
+    }
   } catch (err) {
-    mostrarHint('No se pudo conectar con el servidor. El PDF se descargó igual.');
+    await encolarYAvisar(null, 'No se pudo conectar con el servidor. El informe se guardó en este dispositivo y se reintentará automáticamente.');
   }
 }
+
+// Reintenta todo lo encolado — se llama al volver la conexión y una vez al
+// cargar la app (por si quedó algo pendiente de una sesión anterior).
+// Si se pide una sincronización mientras otra ya está en curso (ej. se encola
+// un informe nuevo justo cuando el evento 'online' ya está sincronizando),
+// no se ignora: se marca para correr otra pasada apenas termine la actual, en
+// vez de perder silenciosamente ese pedido.
+let sincronizandoInformes = false;
+let reintentoSincronizacionPendiente = false;
+async function sincronizarInformesPendientes(){
+  if (sincronizandoInformes) { reintentoSincronizacionPendiente = true; return; }
+  if (!navigator.onLine) return;
+  sincronizandoInformes = true;
+  try {
+    do {
+      reintentoSincronizacionPendiente = false;
+      const pendientes = await listarInformesPendientes();
+      let sincronizados = 0;
+      for (const registro of pendientes) {
+        try {
+          const resultado = await intentarSubirInforme(registro.data, registro.pdfBlob, registro.interventionId);
+          if (resultado.ok) {
+            await eliminarInformePendiente(registro.id);
+            sincronizados++;
+          } else if (resultado.etapa === 'reporte') {
+            // Guarda el avance (intervención ya creada) para no duplicarla en el próximo intento.
+            registro.interventionId = resultado.interventionId;
+            await encolarInformePendiente(registro);
+          }
+        } catch (err) {
+          reintentoSincronizacionPendiente = false;
+          break; // se cortó la conexión a mitad de la sincronización — se reintenta después
+        }
+      }
+      if (sincronizados > 0) {
+        mostrarToast(`${sincronizados} informe${sincronizados > 1 ? 's' : ''} sincronizado${sincronizados > 1 ? 's' : ''} con el servidor.`);
+      }
+    } while (reintentoSincronizacionPendiente && navigator.onLine);
+  } finally {
+    sincronizandoInformes = false;
+    actualizarBadgePendientes();
+  }
+}
+
+window.addEventListener('online', sincronizarInformesPendientes);
+document.getElementById('pending-sync-badge')?.addEventListener('click', () => {
+  if (navigator.onLine) sincronizarInformesPendientes();
+  else mostrarToast('Sin conexión — se sincronizará automáticamente al volver la señal.');
+});
 
 // Solo se persiste un informe nuevo (no uno reabierto del historial), y solo una vez
 // aunque el técnico use más de un botón de salida (descargar, WhatsApp, finalizar).
@@ -2539,7 +2706,7 @@ document.getElementById('btn-informe-whatsapp').addEventListener('click', async 
     }
     if (d.alcances) mensaje += `\nAlcances técnicos: ${d.alcances}\n`;
     if (d.smAplica) {
-      const compNombre = d.smComponente && COMPONENTES[d.smComponente] ? COMPONENTES[d.smComponente].nombre : '';
+      const compNombre = d.smComponente && COMPONENTE_META[d.smComponente] ? COMPONENTE_META[d.smComponente].nombre : '';
       mensaje += `\n*Solicitud de Mantenimiento:* ${d.smFolio || 'SM'} — ${d.smTipo || ''} · Prioridad ${d.smPrioridad || ''}${compNombre ? ' · ' + compNombre : ''}\n${d.smDescripcion || ''}\n`;
     }
     if (d.observaciones) mensaje += `\nRecomendaciones: ${d.observaciones}\n`;
@@ -2725,6 +2892,7 @@ function mapearActivoDesdeApi(data){
     fabricante: data.manufacturer || '',
     modelo: data.model || '',
     foto: data.photo_url || null,
+    specs: data.specs || {},
   };
 }
 
@@ -3101,4 +3269,9 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+// Por si quedaron informes pendientes de una sesión anterior (se cerró la app
+// sin conexión, por ejemplo) y ya hay señal al volver a abrir.
+actualizarBadgePendientes();
+sincronizarInformesPendientes();
 

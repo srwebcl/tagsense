@@ -23,13 +23,29 @@ export async function crearActivo(formData: FormData) {
     throw new Error("tag_code y name son obligatorios.");
   }
 
+  // specs es jsonb freeform (ver 0005_asset_fields.sql) — solo se guardan las
+  // claves que el técnico realmente completó, para no mostrar filas vacías
+  // en "Información General" (ver setFilaOpcional en app.js).
+  const specsFields: Record<string, string> = {
+    country_of_origin: "specs_country_of_origin",
+    operating_weight: "specs_operating_weight",
+    load_capacity: "specs_load_capacity",
+    engine_type: "specs_engine_type",
+    power: "specs_power",
+  };
+  const specs: Record<string, string> = {};
+  for (const [key, field] of Object.entries(specsFields)) {
+    const val = String(formData.get(field) || "").trim();
+    if (val) specs[key] = val;
+  }
+
   let result;
   try {
     result = await pool.query(
       `insert into assets
          (tenant_id, tag_code, name, model, serial_number, status, location,
-          asset_type, manufacturer, manufacture_year)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          asset_type, manufacturer, manufacture_year, specs)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        returning id`,
       [
         appUser.tenant_id,
@@ -42,6 +58,7 @@ export async function crearActivo(formData: FormData) {
         String(formData.get("asset_type") || "").trim() || null,
         String(formData.get("manufacturer") || "").trim() || null,
         parseYear(formData.get("manufacture_year")),
+        JSON.stringify(specs),
       ]
     );
   } catch (err) {
