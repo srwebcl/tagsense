@@ -1,14 +1,15 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Resuelve un activo por el código leído del tag (QR o NFC) — ver API_SPEC.md.
 // tenant_id nunca se recibe del cliente: se resuelve siempre desde la sesión
 // autenticada (ver /tagsense-docs/skills/multi-tenant-auth/SKILL.md, regla #3).
-export async function GET(
+export const GET = withErrorLogging("assets/:tag_code", async (
   request: Request,
   { params }: { params: Promise<{ tag_code: string }> }
-) {
+) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -35,4 +36,4 @@ export async function GET(
   }
 
   return Response.json(asset);
-}
+});

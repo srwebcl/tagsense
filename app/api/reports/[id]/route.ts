@@ -1,12 +1,13 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // GET /api/reports/:id — ver API_SPEC.md: estado + URL de descarga.
-export async function GET(
+export const GET = withErrorLogging("reports/:id", async (
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -26,4 +27,4 @@ export async function GET(
   const url = await uploads.url(report.file_url, { expiresIn: 3600 });
 
   return Response.json({ id: report.id, folio: report.folio, generated_at: report.generated_at, url });
-}
+});

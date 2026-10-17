@@ -1,12 +1,13 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Marca una solicitud de mantenimiento como resuelta. Por ahora el único cambio
 // de estado soportado es "Resuelta" — no se vuelve a abrir desde aquí.
-export async function PATCH(
+export const PATCH = withErrorLogging("maintenance-requests/:id", async (
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -31,4 +32,4 @@ export async function PATCH(
   }
 
   return Response.json(result.rows[0]);
-}
+});

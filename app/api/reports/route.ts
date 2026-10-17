@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Sube el PDF ya generado en el navegador (jsPDF, ver skill pdf-reports — se queda
 // client-side en Etapa 1) y deja el registro en `reports`, asociado a la intervención.
 // multipart/form-data: file (el PDF), intervention_id, folio.
-export async function POST(request: Request) {
+export const POST = withErrorLogging("reports", async (request: Request) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -43,4 +44,4 @@ export async function POST(request: Request) {
   const url = await uploads.url(key, { expiresIn: 3600 });
 
   return Response.json({ ...result.rows[0], url }, { status: 201 });
-}
+});

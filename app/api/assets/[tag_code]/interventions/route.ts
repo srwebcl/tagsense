@@ -1,11 +1,12 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Historial técnico de un activo — ver API_SPEC.md: GET /api/assets/:id/interventions.
-export async function GET(
+export const GET = withErrorLogging("assets/:tag_code/interventions", async (
   request: Request,
   { params }: { params: Promise<{ tag_code: string }> }
-) {
+) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -29,4 +30,4 @@ export async function GET(
   );
 
   return Response.json(result.rows);
-}
+});

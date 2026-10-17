@@ -43,15 +43,24 @@ function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(",")}]`;
 }
 
-export async function indexDocument(documentId: string): Promise<void> {
+// tenantId es obligatorio y filtra la select Y los dos updates que siguen —
+// sin él, un documentId adivinado/reutilizado (los Server Actions no protegen
+// sus argumentos vinculados contra manipulación del lado del cliente) podría
+// forzar un reindexado costoso o sobrescribir el estado de un documento de
+// otro tenant. Ver reindexarDocumento en app/admin/assets/actions.ts, el único
+// llamador que recibe un documentId no generado por el propio servidor.
+export async function indexDocument(documentId: string, tenantId: string): Promise<void> {
   const docResult = await pool.query(
-    `select id, tenant_id, file_url from asset_documents where id = $1 limit 1`,
-    [documentId]
+    `select id, tenant_id, file_url from asset_documents where id = $1 and tenant_id = $2 limit 1`,
+    [documentId, tenantId]
   );
   const doc = docResult.rows[0];
   if (!doc) return;
 
-  await pool.query(`update asset_documents set index_status = 'processing' where id = $1`, [documentId]);
+  await pool.query(
+    `update asset_documents set index_status = 'processing' where id = $1 and tenant_id = $2`,
+    [documentId, tenantId]
+  );
 
   try {
     const fileBytes = await uploads.download(doc.file_url);
@@ -64,14 +73,14 @@ export async function indexDocument(documentId: string): Promise<void> {
     const chunks = chunkText(text);
     if (chunks.length === 0) {
       await pool.query(
-        `update asset_documents set index_status = 'failed', index_error = $2 where id = $1`,
-        [documentId, "El PDF no tiene texto extraíble (¿es un escaneo/imagen sin OCR?)."]
+        `update asset_documents set index_status = 'failed', index_error = $3 where id = $1 and tenant_id = $2`,
+        [documentId, tenantId, "El PDF no tiene texto extraíble (¿es un escaneo/imagen sin OCR?)."]
       );
       return;
     }
 
     // Limpia chunks de una indexación anterior (reintentos no deben duplicar).
-    await pool.query(`delete from document_chunks where document_id = $1`, [documentId]);
+    await pool.query(`delete from document_chunks where document_id = $1 and tenant_id = $2`, [documentId, tenantId]);
 
     for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
       const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
@@ -93,13 +102,14 @@ export async function indexDocument(documentId: string): Promise<void> {
     }
 
     await pool.query(
-      `update asset_documents set index_status = 'indexed', indexed_at = now(), index_error = null where id = $1`,
-      [documentId]
+      `update asset_documents set index_status = 'indexed', indexed_at = now(), index_error = null where id = $1 and tenant_id = $2`,
+      [documentId, tenantId]
     );
   } catch (err) {
+    console.error(`[indexDocument] falló el indexado de ${documentId} (tenant ${tenantId}):`, err);
     await pool.query(
-      `update asset_documents set index_status = 'failed', index_error = $2 where id = $1`,
-      [documentId, err instanceof Error ? err.message : "Error desconocido al indexar."]
+      `update asset_documents set index_status = 'failed', index_error = $3 where id = $1 and tenant_id = $2`,
+      [documentId, tenantId, err instanceof Error ? err.message : "Error desconocido al indexar."]
     );
   }
 }

@@ -1,9 +1,10 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Crea una intervención (historial técnico) — ver API_SPEC.md y DATABASE_SCHEMA.md.
 // tenant_id y technician_id siempre se resuelven desde la sesión, nunca desde el body.
-export async function POST(request: Request) {
+export const POST = withErrorLogging("interventions", async (request: Request) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -68,4 +69,4 @@ export async function POST(request: Request) {
   }
 
   return Response.json(intervention, { status: 201 });
-}
+});

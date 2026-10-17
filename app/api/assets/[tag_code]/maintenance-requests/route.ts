@@ -1,12 +1,13 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Solicitudes de mantenimiento de un activo — generadas desde el informe de
 // campo ("¿Aplica una solicitud de mantenimiento?"), ver /api/interventions.
-export async function GET(
+export const GET = withErrorLogging("assets/:tag_code/maintenance-requests", async (
   request: Request,
   { params }: { params: Promise<{ tag_code: string }> }
-) {
+) => {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return Response.json({ error: { code: "unauthorized", message: "Sesión inválida o usuario sin tenant asignado." } }, { status: 401 });
@@ -28,4 +29,4 @@ export async function GET(
   );
 
   return Response.json(result.rows);
-}
+});

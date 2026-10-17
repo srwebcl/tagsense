@@ -1,5 +1,7 @@
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Identificación pública de un activo por el código del tag — sin login.
 // Un QR/NFC físico pegado a un equipo es, por naturaleza, un identificador
@@ -8,11 +10,20 @@ import { uploads } from "@/lib/storage";
 // la exige porque alimenta la ficha técnica completa: historial, documentos,
 // specs). Solo expone el mismo subconjunto de campos que ya se muestra en la
 // tarjeta resumida (step-confirm-2) antes de pedir usuario y contraseña.
-export async function GET(
+export const GET = withErrorLogging("public/assets/:tag_code", async (
   request: Request,
   { params }: { params: Promise<{ tag_code: string }> }
-) {
+) => {
   const { tag_code } = await params;
+
+  // Sin sesión no hay a quién culpar más que a la IP — sube el costo de
+  // cosechar el inventario completo probando tag_codes secuenciales (son
+  // predecibles, ej. "TS-CAEX-0000125"). 60/min es holgado para un técnico
+  // real escaneando, pero frena un script.
+  const { limited } = await checkRateLimit(`public-asset:${getClientIp(request)}`, 60, 60);
+  if (limited) {
+    return Response.json({ error: { code: "rate_limited", message: "Demasiadas solicitudes. Intenta de nuevo en un momento." } }, { status: 429 });
+  }
 
   // Sin filtro por tenant_id a propósito: no hay sesión de la cual resolverlo.
   // El esquema permite tag_code repetido entre tenants distintos (unique es
@@ -38,4 +49,4 @@ export async function GET(
   }
 
   return Response.json(asset);
-}
+});

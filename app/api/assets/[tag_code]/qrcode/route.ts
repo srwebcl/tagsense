@@ -1,14 +1,15 @@
 import QRCode from "qrcode";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
+import { withErrorLogging } from "@/lib/api-handler";
 
 // Genera el QR al vuelo a partir del tag_code — nada que guardar ni mantener
 // sincronizado; si el dominio cambia (ej. a tagsense.cl), el QR se arma con
 // el origen de la request actual, sin tocar código.
-export async function GET(
+export const GET = withErrorLogging("assets/:tag_code/qrcode", async (
   request: Request,
   { params }: { params: Promise<{ tag_code: string }> }
-) {
+) => {
   const appUser = await requireAdmin();
   const { tag_code } = await params;
 
@@ -42,4 +43,4 @@ export async function GET(
         : {}),
     },
   });
-}
+});

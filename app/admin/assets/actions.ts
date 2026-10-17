@@ -22,25 +22,37 @@ export async function crearActivo(formData: FormData) {
     throw new Error("tag_code y name son obligatorios.");
   }
 
-  const result = await pool.query(
-    `insert into assets
-       (tenant_id, tag_code, name, model, serial_number, status, location,
-        asset_type, manufacturer, manufacture_year)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     returning id`,
-    [
-      appUser.tenant_id,
-      tagCode,
-      name,
-      String(formData.get("model") || "").trim() || null,
-      String(formData.get("serial_number") || "").trim() || null,
-      String(formData.get("status") || "operativo"),
-      String(formData.get("location") || "").trim() || null,
-      String(formData.get("asset_type") || "").trim() || null,
-      String(formData.get("manufacturer") || "").trim() || null,
-      parseYear(formData.get("manufacture_year")),
-    ]
-  );
+  let result;
+  try {
+    result = await pool.query(
+      `insert into assets
+         (tenant_id, tag_code, name, model, serial_number, status, location,
+          asset_type, manufacturer, manufacture_year)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       returning id`,
+      [
+        appUser.tenant_id,
+        tagCode,
+        name,
+        String(formData.get("model") || "").trim() || null,
+        String(formData.get("serial_number") || "").trim() || null,
+        String(formData.get("status") || "operativo"),
+        String(formData.get("location") || "").trim() || null,
+        String(formData.get("asset_type") || "").trim() || null,
+        String(formData.get("manufacturer") || "").trim() || null,
+        parseYear(formData.get("manufacture_year")),
+      ]
+    );
+  } catch (err) {
+    // Código 23505 = unique_violation en Postgres — acá siempre es
+    // unique(tenant_id, tag_code) (ver 0001_init_schema.sql), el único unique
+    // constraint de esta tabla alcanzable desde este formulario.
+    if (err && typeof err === "object" && "code" in err && err.code === "23505") {
+      throw new Error(`Ya existe un activo con el código "${tagCode}".`);
+    }
+    console.error("[crearActivo] error al insertar el activo:", err);
+    throw new Error("No se pudo crear el activo. Intenta de nuevo.");
+  }
   const assetId = result.rows[0].id;
 
   const photo = formData.get("photo");
@@ -138,14 +150,27 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   // Indexado (extraer texto, generar embeddings) corre después de responder —
   // subir un manual grande no debe bloquear la UI (ver skill rag-assistant).
   const documentId = docResult.rows[0].id;
-  after(() => indexDocument(documentId));
+  after(() => indexDocument(documentId, appUser.tenant_id));
 
   redirect(`/admin/assets/${assetId}`);
 }
 
 export async function reindexarDocumento(assetId: string, documentId: string) {
-  await requireAdmin();
-  after(() => indexDocument(documentId));
+  const appUser = await requireAdmin();
+
+  // documentId llega como argumento vinculado de un Server Action — eso lo manda
+  // de vuelta en el POST, no lo protege de manipulación. Se confirma que el
+  // documento sea de este tenant (y de este activo) antes de disparar un
+  // reindexado costoso o tocar su estado.
+  const docResult = await pool.query(
+    `select id from asset_documents where tenant_id = $1 and asset_id = $2 and id = $3 limit 1`,
+    [appUser.tenant_id, assetId, documentId]
+  );
+  if (!docResult.rows[0]) {
+    throw new Error("Documento no encontrado.");
+  }
+
+  after(() => indexDocument(documentId, appUser.tenant_id));
   redirect(`/admin/assets/${assetId}`);
 }
 
