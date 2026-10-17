@@ -2,20 +2,43 @@
 
 // Subir este número obliga a los dispositivos ya instalados a descargar la nueva versión
 // y purgar la caché anterior (ver evento 'activate').
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 
 // Todo lo que la app necesita para funcionar sin conexión, incluido el primer arranque offline.
 // './' ya se puede precachear directamente: next.config.ts sirve index.html en "/" vía
 // rewrite (no redirect), así que la respuesta no viene marcada como "redirected" y
 // Chromium la acepta sin problema vía respondWith() en una navegación.
+//
+// app.js (un solo archivo de 3300+ líneas) se partió en módulos ES reales —
+// cada uno se lista acá explícito porque el navegador los pide todos al cargar
+// main.js (import estático), y el primer arranque offline necesita tenerlos
+// ya en caché, no solo "probablemente cacheados" por la estrategia de abajo.
 const PRECACHE_URLS = [
   './',
   './index.html',
   './favicon.ico',
   './manifest.json',
   './assets/css/styles.css',
-  './assets/js/app.js',
+  './assets/js/main.js',
+  './assets/js/core.js',
+  './assets/js/scan.js',
+  './assets/js/qr.js',
+  './assets/js/manual-code.js',
+  './assets/js/auth.js',
+  './assets/js/asistente.js',
+  './assets/js/ui-misc.js',
+  './assets/js/documentos.js',
+  './assets/js/instructivos.js',
+  './assets/js/componentes.js',
+  './assets/js/solicitudes.js',
+  './assets/js/historial.js',
+  './assets/js/informe-state.js',
+  './assets/js/informe-form.js',
+  './assets/js/informe-pdf.js',
+  './assets/js/informe-sync.js',
+  './assets/js/connection.js',
+  './assets/js/pwa-install.js',
   './assets/img/logo-mark.png',
   './assets/img/logo-tagsense.png',
   './assets/img/logo-tagsense-dark.png',
