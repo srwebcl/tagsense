@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
+import { pool } from "@/lib/db";
 import { crearActivo } from "@/app/admin/assets/actions";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
+import { AssetTypeSelect } from "@/app/admin/_components/AssetTypeSelect";
 
 export default async function NewAssetPage() {
   const appUser = await requireAdmin();
+
+  const typesResult = await pool.query(`select name from asset_types where tenant_id = $1 order by name`, [appUser.tenant_id]);
+  const tipoOptions = typesResult.rows.map((r) => r.name);
 
   return (
     <>
@@ -63,29 +68,7 @@ export default async function NewAssetPage() {
 
             <div className="field">
               <label>Tipo de activo</label>
-              <div className="input-wrap">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <rect x="3" y="7" width="18" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-                <input name="asset_type" list="asset-type-options" placeholder="Camión minero" />
-              </div>
-              <datalist id="asset-type-options">
-                <option value="Camión minero" />
-                <option value="Camión de apoyo" />
-                <option value="Excavadora" />
-                <option value="Cargador frontal" />
-                <option value="Perforadora" />
-                <option value="Planta de chancado" />
-                <option value="Grúa" />
-                <option value="Bomba" />
-                <option value="Compresor" />
-                <option value="Generador" />
-                <option value="Vehículo liviano" />
-                <option value="Equipo industrial" />
-                <option value="Maquinaria" />
-                <option value="Otro" />
-              </datalist>
+              <AssetTypeSelect options={tipoOptions} />
             </div>
 
             <div className="field">

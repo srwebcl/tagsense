@@ -37,6 +37,18 @@ function construirSpecsDesdeFormData(formData: FormData): Record<string, string>
   return specs;
 }
 
+// "Tipo de activo" es un select con catálogo real por tenant (ver
+// 0012_asset_types.sql) que crece solo desde este mismo formulario: cualquier
+// tipo que se use al crear o editar un activo queda disponible para la próxima
+// vez, sin necesitar una pantalla de administración aparte.
+async function registrarTipoDeActivo(tenantId: string, assetType: string | null) {
+  if (!assetType) return;
+  await pool.query(
+    `insert into asset_types (tenant_id, name) values ($1, $2) on conflict (tenant_id, name) do nothing`,
+    [tenantId, assetType]
+  );
+}
+
 export async function crearActivo(formData: FormData) {
   const appUser = await requireAdmin();
 
@@ -47,6 +59,7 @@ export async function crearActivo(formData: FormData) {
   }
 
   const specs = construirSpecsDesdeFormData(formData);
+  const assetType = String(formData.get("asset_type") || "").trim() || null;
 
   let result;
   try {
@@ -64,7 +77,7 @@ export async function crearActivo(formData: FormData) {
         String(formData.get("serial_number") || "").trim() || null,
         String(formData.get("status") || "operativo"),
         String(formData.get("location") || "").trim() || null,
-        String(formData.get("asset_type") || "").trim() || null,
+        assetType,
         String(formData.get("manufacturer") || "").trim() || null,
         parseYear(formData.get("manufacture_year")),
         JSON.stringify(specs),
@@ -81,6 +94,7 @@ export async function crearActivo(formData: FormData) {
     throw new Error("No se pudo crear el activo. Intenta de nuevo.");
   }
   const assetId = result.rows[0].id;
+  await registrarTipoDeActivo(appUser.tenant_id, assetType);
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
@@ -115,6 +129,7 @@ export async function actualizarActivo(assetId: string, formData: FormData) {
   }
 
   const specs = construirSpecsDesdeFormData(formData);
+  const assetType = String(formData.get("asset_type") || "").trim() || null;
 
   await pool.query(
     `update assets set
@@ -127,7 +142,7 @@ export async function actualizarActivo(assetId: string, formData: FormData) {
       String(formData.get("serial_number") || "").trim() || null,
       String(formData.get("status") || "operativo"),
       String(formData.get("location") || "").trim() || null,
-      String(formData.get("asset_type") || "").trim() || null,
+      assetType,
       String(formData.get("manufacturer") || "").trim() || null,
       parseYear(formData.get("manufacture_year")),
       JSON.stringify(specs),
@@ -135,6 +150,7 @@ export async function actualizarActivo(assetId: string, formData: FormData) {
       assetId,
     ]
   );
+  await registrarTipoDeActivo(appUser.tenant_id, assetType);
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
