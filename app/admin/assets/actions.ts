@@ -148,3 +148,14 @@ export async function reindexarDocumento(assetId: string, documentId: string) {
   after(() => indexDocument(documentId));
   redirect(`/admin/assets/${assetId}`);
 }
+
+export async function resolverSolicitudAdmin(assetId: string, requestId: string) {
+  const appUser = await requireAdmin();
+  await pool.query(
+    `update maintenance_requests
+     set estado = 'Resuelta', resolved_by = $1, resolved_at = now()
+     where tenant_id = $2 and id = $3 and estado = 'Abierta'`,
+    [appUser.id, appUser.tenant_id, requestId]
+  );
+  redirect(`/admin/assets/${assetId}`);
+}

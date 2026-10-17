@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { subirDocumento, reindexarDocumento, eliminarActivo, subirFotoActivo } from "@/app/admin/assets/actions";
+import { subirDocumento, reindexarDocumento, eliminarActivo, subirFotoActivo, resolverSolicitudAdmin } from "@/app/admin/assets/actions";
 import { uploads } from "@/lib/storage";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
@@ -29,6 +29,12 @@ const INDEX_STATUS: Record<string, { label: string; cls: string }> = {
   processing: { label: "Indexando…", cls: "warn" },
   indexed: { label: "Indexado", cls: "ok" },
   failed: { label: "Falló", cls: "err" },
+};
+const PRIORIDAD_CLASS: Record<string, string> = {
+  Baja: "ok",
+  Media: "warn",
+  Alta: "err",
+  Urgente: "err",
 };
 
 export default async function AssetDetailPage({
@@ -64,10 +70,17 @@ export default async function AssetDetailPage({
     [appUser.tenant_id, id]
   );
 
+  const solicitudesResult = await pool.query(
+    `select id, folio, tipo, prioridad, componente, descripcion, estado, created_at, resolved_at
+     from maintenance_requests where tenant_id = $1 and asset_id = $2 order by created_at desc`,
+    [appUser.tenant_id, id]
+  );
+
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
   const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
+  const resolverSolicitudDeEsteActivo = resolverSolicitudAdmin.bind(null, id);
   const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
 
   return (
@@ -176,6 +189,47 @@ export default async function AssetDetailPage({
           pueda buscarlos. Puede tardar unos segundos; si queda en &quot;Falló&quot;, probablemente el PDF es un
           escaneo sin texto real (necesitaría OCR, no soportado todavía).
         </p>
+
+        <p className="section-label">Solicitudes de mantenimiento</p>
+
+        {solicitudesResult.rows.length === 0 ? (
+          <div className="admin-empty" style={{ marginBottom: 24 }}>
+            Todavía no se han generado solicitudes desde los informes de campo.
+          </div>
+        ) : (
+          <div className="doc-list" style={{ marginBottom: 24 }}>
+            {solicitudesResult.rows.map((sm) => (
+              <div key={sm.id} className="doc-row">
+                <div className="txt">
+                  <strong>
+                    {sm.folio} · {sm.tipo}
+                  </strong>
+                  <small>
+                    {new Date(sm.created_at).toLocaleDateString("es-CL")}
+                    {sm.descripcion ? ` · ${sm.descripcion}` : ""}
+                  </small>
+                </div>
+                <span className={`status-pill ${PRIORIDAD_CLASS[sm.prioridad] || "warn"}`}>
+                  <span className="dot" />
+                  {sm.prioridad}
+                </span>
+                <span className={`status-pill ${sm.estado === "Resuelta" ? "ok" : "warn"}`}>
+                  <span className="dot" />
+                  {sm.estado}
+                </span>
+                {sm.estado === "Abierta" && (
+                  <form action={resolverSolicitudDeEsteActivo.bind(null, sm.id)}>
+                    <button type="submit" className="doc-reindex-btn" title="Marcar como resuelta">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="admin-panel">
           <p className="section-label" style={{ marginBottom: 18 }}>{photoUrl ? "Cambiar foto" : "Foto principal"}</p>

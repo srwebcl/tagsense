@@ -234,6 +234,7 @@ accessBtn.addEventListener('click', async () => {
     if (pendingDestino === 'ficha') {
       pendingDestino = null;
       goTo('step-confirm-3');
+      cargarSolicitudes();
     } else if (pendingDestino === 'informe') {
       pendingDestino = null;
       abrirFormularioInforme();
@@ -359,6 +360,7 @@ async function requiereLogin(destino){
 document.getElementById('open-ficha-2').addEventListener('click', async () => {
   if (await requiereLogin('ficha')) return;
   goTo('step-confirm-3');
+  cargarSolicitudes();
 });
 document.getElementById('back-to-read').addEventListener('click', () => {
   resetReadState();
@@ -529,9 +531,17 @@ function initChat(){
 }
 
 let toastTimeout = null;
+// El toast ahora lo usan pantallas con headers de alturas distintas (el chat del
+// asistente, que tiene su propio chat-header, y las pantallas de detalle tipo
+// "Solicitudes") — en vez de una posición fija pensada para una sola, se calcula
+// el borde inferior del header de la pantalla activa en cada llamada.
 function mostrarToast(mensaje, duracion = 2500){
   const el = document.getElementById('toast-notification');
   if (!el) return;
+  const stageActivo = steps.map(id => document.getElementById(id)).find(s => s && !s.classList.contains('hidden'));
+  const header = stageActivo ? stageActivo.querySelector('.chat-header, .detail-topbar') : null;
+  const topSeguro = header ? header.getBoundingClientRect().bottom + 12 : 80;
+  el.style.top = `${Math.max(topSeguro, 16)}px`;
   el.textContent = mensaje;
   el.classList.add('show');
   if (toastTimeout) clearTimeout(toastTimeout);
@@ -1328,50 +1338,104 @@ document.getElementById('back-instructivos').addEventListener('click', () => goT
 // ================= SOLICITUDES DE MANTENIMIENTO (SM) =================
 // Nacen dentro del Informe cuando el mantenedor detecta algo que excede la intervención
 // del día (repuesto pendiente, inspección técnica, monitoreo predictivo, etc.).
+// Son un registro real en el backend (tabla maintenance_requests) — ver
+// /api/assets/:tag_code/maintenance-requests y /api/maintenance-requests/:id (PATCH
+// para cerrarla). solicitudesCache es la última copia conocida para esta sesión;
+// se reemplaza por completo cada vez que cargarSolicitudes() consulta al servidor.
 let smFolioCounter = 1;
-const SOLICITUDES_MANTENIMIENTO = [
-  {
-    folio: 'SM-0001', tipo: 'Inspección técnica', prioridad: 'Media', componente: 'frenos',
-    descripcion: 'Pastilla delantera izquierda cercana al espesor mínimo. Programar reemplazo en próxima mantención.',
-    estado: 'Abierta', origenInforme: 'INF-H003', fecha: '28/03/2024', tecnico: 'Ana Rojas',
-  },
-];
+let solicitudesCache = [];
 
 function renderSMList(){
   const cont = document.getElementById('sm-list');
   if (!cont) return;
-  if (!SOLICITUDES_MANTENIMIENTO.length) {
+  if (!solicitudesCache.length) {
     cont.innerHTML = '<div class="comp-hist-empty" style="padding:4px 2px;">Aún no se han generado solicitudes de mantenimiento desde los informes.</div>';
     return;
   }
   const PRIORIDAD_CLASE = { 'Baja':'baja', 'Media':'media', 'Alta':'alta', 'Urgente':'urgente' };
-  cont.innerHTML = SOLICITUDES_MANTENIMIENTO.slice().reverse().map(sm => `
+  cont.innerHTML = solicitudesCache.map(sm => `
     <div class="sm-card">
       <div class="sm-card-top">
         <div>
           <div class="sm-folio">${escapeHtml(sm.folio)}</div>
-          <div class="sm-meta">${escapeHtml(sm.fecha)} · ${escapeHtml(sm.tecnico)} · Origen: ${escapeHtml(sm.origenInforme)}</div>
+          <div class="sm-meta">${escapeHtml(sm.fecha)}${sm.tecnico ? ' · ' + escapeHtml(sm.tecnico) : ''}</div>
         </div>
         <span class="sm-prioridad ${PRIORIDAD_CLASE[sm.prioridad] || ''}">${escapeHtml(sm.prioridad)}</span>
       </div>
       <div class="sm-tipo"><b>${escapeHtml(sm.tipo)}</b>${sm.componente && COMPONENTES[sm.componente] ? ' · ' + escapeHtml(COMPONENTES[sm.componente].nombre) : ''}</div>
-      <div class="sm-desc">${escapeHtml(sm.descripcion)}</div>
-      <span class="sm-estado">${escapeHtml(sm.estado)}</span>
+      <div class="sm-desc">${escapeHtml(sm.descripcion || 'Sin detalle adicional.')}</div>
+      <div class="sm-card-bottom">
+        <span class="sm-estado ${sm.estado === 'Resuelta' ? 'resuelta' : ''}">${escapeHtml(sm.estado)}</span>
+        ${sm.estado === 'Abierta' && sm.id ? `<button class="sm-resolve-btn" data-sm-id="${sm.id}" type="button">Marcar como resuelta</button>` : ''}
+      </div>
     </div>
   `).join('');
+
+  cont.querySelectorAll('.sm-resolve-btn').forEach(btn => {
+    btn.addEventListener('click', () => resolverSolicitud(btn.dataset.smId, btn));
+  });
+}
+
+async function resolverSolicitud(id, btn){
+  if (!navigator.onLine) { mostrarToast('Necesitas conexión para marcarla como resuelta.'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+  try {
+    const resp = await fetch(`/api/maintenance-requests/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado: 'Resuelta' }),
+    });
+    if (!resp.ok) {
+      mostrarToast('No se pudo marcar como resuelta. Intenta de nuevo.');
+      btn.disabled = false;
+      btn.textContent = 'Marcar como resuelta';
+      return;
+    }
+    const sm = solicitudesCache.find(s => s.id === id);
+    if (sm) sm.estado = 'Resuelta';
+    renderSMList();
+    actualizarTileSolicitudes();
+    mostrarToast('Solicitud marcada como resuelta.');
+  } catch (err) {
+    mostrarToast('No se pudo conectar con el servidor.');
+    btn.disabled = false;
+    btn.textContent = 'Marcar como resuelta';
+  }
 }
 
 function actualizarTileSolicitudes(){
   const el = document.getElementById('sm-tile-count');
   if (!el) return;
-  const abiertas = SOLICITUDES_MANTENIMIENTO.filter(s => s.estado === 'Abierta').length;
+  const abiertas = solicitudesCache.filter(s => s.estado === 'Abierta').length;
   el.textContent = abiertas > 0 ? `${abiertas} abierta${abiertas > 1 ? 's' : ''}` : 'Sin solicitudes';
 }
 actualizarTileSolicitudes();
 
+// Trae las solicitudes reales del activo actual — se usa tanto al entrar a la
+// pantalla "Solicitudes" como de fondo al abrir la ficha técnica (para que el
+// contador del tile y el badge "pendiente" en Componentes ya tengan datos).
+async function cargarSolicitudes(){
+  if (!activoActualId || !navigator.onLine) return;
+  try {
+    const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/maintenance-requests`);
+    if (!resp.ok) return;
+    const items = await resp.json();
+    solicitudesCache = items.map(item => ({
+      id: item.id, folio: item.folio, tipo: item.tipo, prioridad: item.prioridad,
+      componente: item.componente, descripcion: item.descripcion, estado: item.estado,
+      fecha: item.created_at ? new Date(item.created_at).toLocaleDateString('es-CL') : '',
+      tecnico: item.tecnico_nombre,
+    }));
+    actualizarTileSolicitudes();
+    renderSMList();
+  } catch (err) { /* sin red o backend caído: se queda con lo que ya tenía en caché */ }
+}
+
 document.getElementById('tile-solicitudes').addEventListener('click', () => {
-  renderSMList();
+  document.getElementById('sm-list').innerHTML = '<p class="historial-status">Cargando solicitudes…</p>';
   goTo('step-solicitudes');
+  cargarSolicitudes();
 });
 document.getElementById('back-solicitudes').addEventListener('click', () => goTo('step-confirm-3'));
 
@@ -1440,7 +1504,7 @@ function renderComponentes(){
   container.innerHTML = Object.entries(COMPONENTES).map(([key, c]) => {
     const horas = Math.max(0, Math.round(horometroActual - c.horometroInstalacion));
     const enAlerta = horas >= UMBRAL_ALERTA_HORAS;
-    const smAbierta = SOLICITUDES_MANTENIMIENTO.find(s => s.componente === key && s.estado === 'Abierta');
+    const smAbierta = solicitudesCache.find(s => s.componente === key && s.estado === 'Abierta');
     const origenTexto = c.empresa
       ? `Reparado — ${escapeHtml(c.empresa)}, ${escapeHtml(c.fechaInstalacion)}`
       : `Componente de fábrica, instalado ${escapeHtml(c.fechaInstalacion)}`;
@@ -1965,10 +2029,14 @@ btnPreviewInforme.addEventListener('click', () => {
     const smFolio = 'SM-' + String(smFolioCounter).padStart(4, '0');
     smFolioCounter++;
     data.smFolio = smFolio;
-    SOLICITUDES_MANTENIMIENTO.push({
+    // Optimista: todavía no existe en el backend (se crea recién al guardar el
+    // informe, ver /api/interventions) — por eso no tiene id, y por eso
+    // renderSMList() no le muestra el botón de resolver hasta que
+    // cargarSolicitudes() la reemplace por la copia real del servidor.
+    solicitudesCache.unshift({
       folio: smFolio, tipo: smTipo, prioridad: smPrioridad, componente: smComponente,
       descripcion: data.smDescripcion || 'Sin detalle adicional.',
-      estado: 'Abierta', origenInforme: data.folio, fecha: data.fecha, tecnico: data.tecnico,
+      estado: 'Abierta', fecha: data.fecha, tecnico: data.tecnico,
     });
     actualizarTileSolicitudes();
   }

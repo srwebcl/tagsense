@@ -43,6 +43,29 @@ export async function POST(request: Request) {
       body.created_offline ?? false,
     ]
   );
+  const intervention = result.rows[0];
 
-  return Response.json(result.rows[0], { status: 201 });
+  // "¿Aplica una solicitud de mantenimiento?" en el informe — queda como registro
+  // propio (no solo enterrada en details) para poder listarla y cerrarla después.
+  const sm = body.details?.solicitudMantenimiento;
+  if (sm && sm.folio) {
+    await pool.query(
+      `insert into maintenance_requests
+         (tenant_id, asset_id, intervention_id, folio, tipo, prioridad, componente, descripcion, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        appUser.tenant_id,
+        asset.id,
+        intervention.id,
+        sm.folio,
+        sm.tipo ?? "Inspección técnica",
+        sm.prioridad ?? "Media",
+        sm.componente ?? null,
+        sm.descripcion ?? null,
+        appUser.id,
+      ]
+    );
+  }
+
+  return Response.json(intervention, { status: 201 });
 }
