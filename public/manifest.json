@@ -1,7 +1,7 @@
 {
   "name": "TAGSENSE — Gestión de Activos Industriales",
   "short_name": "TAGSENSE",
-  "description": "Identificación de activos por QR/NFC, fichas técnicas, checklists e informes de mantenimiento, con funcionamiento 100% offline.",
+  "description": "Identificación de activos por TAG, fichas técnicas, checklists e informes de mantenimiento, con funcionamiento 100% offline.",
   "id": "/",
   "start_url": "./",
   "scope": "./",

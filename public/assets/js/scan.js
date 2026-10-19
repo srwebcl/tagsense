@@ -178,21 +178,23 @@ async function iniciarEscuchaNFCReal(){
       if (codigo) resolverActivoEscaneado(codigo, { origen: 'nfc' });
     };
     nfcReaderActivo.onreadingerror = () => {
-      mostrarHintLectura('No se pudo leer el tag NFC. Intenta de nuevo o usa QR.');
+      mostrarHintLectura('No se pudo leer el TAG. Intenta de nuevo o usa el código QR.');
     };
   } catch (err) {
     // Permiso denegado o NFC apagado en el equipo: no bloquear, QR/manual siguen disponibles.
-    mostrarHintLectura('Activa el NFC del dispositivo, o usa el escáner QR / código manual.');
+    // El mensaje nunca nombra la tecnología (NFC) — para el técnico es siempre
+    // "el TAG del equipo", sea cual sea el método real que termine resolviéndolo.
+    mostrarHintLectura('Acerca tu dispositivo al TAG del equipo para escanear, o usa el código QR / manual.');
   }
 }
 
 // ---- Arranque real del modo lectura: sin animación falsa, con métodos reales ----
 export function iniciarModoLectura(){
   if (soportaWebNFC) {
-    mostrarHintLectura('Acerca el dispositivo al tag NFC, o escanea el código QR.');
+    mostrarHintLectura('Acerca tu dispositivo al TAG del equipo para escanear.');
     iniciarEscuchaNFCReal();
   } else {
-    mostrarHintLectura('Este navegador no lee NFC — usa el escáner QR o ingresa el código manualmente.');
+    mostrarHintLectura('Acerca tu dispositivo al TAG del equipo para escanear, o usa el código QR.');
   }
 }
 

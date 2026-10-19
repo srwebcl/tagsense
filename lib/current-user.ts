@@ -4,7 +4,7 @@ import { pool } from "@/lib/db";
 export type AppUser = {
   id: string;
   tenant_id: string;
-  role: "technician" | "maintainer" | "admin";
+  role: "technician" | "admin";
   full_name: string | null;
   email: string;
 };
