@@ -16,7 +16,7 @@ export const welcomeName = document.getElementById('welcome-name');
 // informe (al construir la vista previa), lo leen la ficha técnica (scan.js) y
 // Componentes Críticos (componentes.js) — vive acá, no en ninguno de los dos,
 // para que ninguno dependa del otro.
-export let ultimoHorometro = { 'TS-CAEX-0000125': '8.745 h' };
+export let ultimoHorometro = {};
 
 // Muestra/oculta una fila de la ficha según si hay dato — evita filas vacías
 // tipo "Tipo de activo: —" para equipos a los que no se les cargó ese campo.

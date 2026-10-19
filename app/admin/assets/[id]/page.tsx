@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { subirDocumento, reindexarDocumento, eliminarActivo, subirFotoActivo, resolverSolicitudAdmin } from "@/app/admin/assets/actions";
+import {
+  subirDocumento,
+  crearInformacionSimulada,
+  reindexarDocumento,
+  eliminarActivo,
+  subirFotoActivo,
+  resolverSolicitudAdmin,
+} from "@/app/admin/assets/actions";
 import { uploads } from "@/lib/storage";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
+import { CopyTagLinkButton } from "@/app/admin/_components/CopyTagLinkButton";
 
 const STATUS_LABEL: Record<string, string> = {
   operativo: "Operativo",
@@ -65,7 +73,7 @@ export default async function AssetDetailPage({
   }
 
   const docsResult = await pool.query(
-    `select id, title, document_type, created_at, index_status, index_error from asset_documents
+    `select id, title, document_type, source_type, created_at, index_status, index_error from asset_documents
      where tenant_id = $1 and asset_id = $2 order by created_at desc`,
     [appUser.tenant_id, id]
   );
@@ -77,6 +85,7 @@ export default async function AssetDetailPage({
   );
 
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
+  const crearInformacionSimuladaDeEsteActivo = crearInformacionSimulada.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
   const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
@@ -135,14 +144,18 @@ export default async function AssetDetailPage({
             <p className="qr-panel-code">{asset.tag_code}</p>
             <p className="qr-panel-hint">
               Se genera solo a partir del código del tag — imprímelo y pégalo en el equipo. Cualquier cámara lo
-              reconoce; si el celular no tiene la app, igual abre la ficha en el navegador.
+              reconoce; si el celular no tiene la app, igual abre la ficha en el navegador. El mismo link de acá
+              abajo es el que hay que grabar en el chip NFC del tag físico, si el equipo tiene uno.
             </p>
-            <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Descargar QR
-            </a>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Descargar QR
+              </a>
+              <CopyTagLinkButton tagCode={asset.tag_code} />
+            </div>
           </div>
         </div>
 
@@ -171,7 +184,9 @@ export default async function AssetDetailPage({
                       {doc.index_status === "failed" && doc.index_error ? ` · ${doc.index_error}` : ""}
                     </small>
                   </div>
-                  <span className="badge">{DOC_TYPE_LABEL[doc.document_type] || doc.document_type}</span>
+                  <span className="badge">
+                    {doc.source_type === "simulated" ? "Simulado" : DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
+                  </span>
                   <span className={`status-pill ${status.cls}`}>
                     <span className="dot" />
                     {status.label}
@@ -284,6 +299,46 @@ export default async function AssetDetailPage({
             </div>
 
             <SubmitButton>Subir documento</SubmitButton>
+          </form>
+        </div>
+
+        <div className="admin-panel">
+          <p className="section-label" style={{ marginBottom: 8 }}>Información simulada (sin manual real)</p>
+          <p className="sub" style={{ marginBottom: 18 }}>
+            ¿Todavía no tienes el manual PDF de este activo? Escribe acá la información técnica a mano
+            (especificaciones, fallas comunes, procedimientos) para que el asistente IA igual pueda responder sobre
+            este activo — se indexa exactamente igual que un documento subido, y solo se usa para este activo.
+          </p>
+          <form action={crearInformacionSimuladaDeEsteActivo}>
+            <div className="field">
+              <label>Título <span className="req">*</span></label>
+              <div className="input-wrap">
+                <input name="title" required placeholder="Información técnica (simulada)" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Contenido <span className="req">*</span></label>
+              <textarea
+                name="content"
+                required
+                rows={8}
+                placeholder="Ej: Presión de neumáticos recomendada 110 PSI. Cambio de aceite de motor cada 500 horas. Falla común: sensor de temperatura del sistema hidráulico se desconecta con vibración — revisar conector antes de reemplazar el sensor…"
+                style={{
+                  width: "100%",
+                  background: "var(--graphite)",
+                  border: "1.5px solid var(--graphite-line)",
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  color: "var(--text-hi)",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            <SubmitButton>Guardar información simulada</SubmitButton>
           </form>
         </div>
 

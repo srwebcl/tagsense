@@ -7,7 +7,7 @@ import { after } from "next/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
-import { indexDocument } from "@/lib/indexing";
+import { indexDocument, indexSimulatedText } from "@/lib/indexing";
 import { detectImageKind, isPdf } from "@/lib/file-validation";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
@@ -278,6 +278,43 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   redirect(`/admin/assets/${assetId}`);
 }
 
+// Para un activo recién creado que todavía no tiene un manual PDF real: el
+// admin escribe/pega la información técnica a mano y entra al MISMO pipeline
+// de indexado (chunking + embeddings) que un PDF subido — así el asistente
+// IA también "funciona" para este activo, sin mezclar su contexto con el de
+// ningún otro (document_chunks sigue filtrando por asset_id, igual que con un
+// documento real — ver app/api/assistant/chat/route.ts).
+export async function crearInformacionSimulada(assetId: string, formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const title = String(formData.get("title") || "").trim();
+  const content = String(formData.get("content") || "").trim();
+  if (!title || !content) {
+    throw new Error("Falta el título o el contenido de la información simulada.");
+  }
+
+  const assetResult = await pool.query(
+    `select id from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, assetId]
+  );
+  if (!assetResult.rows[0]) {
+    throw new Error("Activo no encontrado.");
+  }
+
+  const docResult = await pool.query(
+    `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, uploaded_by)
+     values ($1, $2, $3, null, $4, 'simulated', $5)
+     returning id`,
+    [appUser.tenant_id, assetId, title, content, appUser.id]
+  );
+
+  const documentId = docResult.rows[0].id;
+  after(() => indexSimulatedText(documentId, appUser.tenant_id));
+
+  revalidatePath(`/admin/assets/${assetId}`);
+  redirect(`/admin/assets/${assetId}`);
+}
+
 export async function reindexarDocumento(assetId: string, documentId: string) {
   const appUser = await requireAdmin();
 
@@ -286,14 +323,19 @@ export async function reindexarDocumento(assetId: string, documentId: string) {
   // documento sea de este tenant (y de este activo) antes de disparar un
   // reindexado costoso o tocar su estado.
   const docResult = await pool.query(
-    `select id from asset_documents where tenant_id = $1 and asset_id = $2 and id = $3 limit 1`,
+    `select id, source_type from asset_documents where tenant_id = $1 and asset_id = $2 and id = $3 limit 1`,
     [appUser.tenant_id, assetId, documentId]
   );
-  if (!docResult.rows[0]) {
+  const doc = docResult.rows[0];
+  if (!doc) {
     throw new Error("Documento no encontrado.");
   }
 
-  after(() => indexDocument(documentId, appUser.tenant_id));
+  if (doc.source_type === "simulated") {
+    after(() => indexSimulatedText(documentId, appUser.tenant_id));
+  } else {
+    after(() => indexDocument(documentId, appUser.tenant_id));
+  }
   revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
 }

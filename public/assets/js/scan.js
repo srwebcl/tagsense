@@ -46,6 +46,12 @@ export function aplicarActivo(id){
   setText('c3-id', 'ID: ' + id);
   setText('c3-status-text', a.estado);
 
+  // Encabezado del Asistente Técnico — quedaba con el texto de demo fijo
+  // ("Camión Minero MT65S · TS-CAEX-0000125") sin importar qué activo
+  // estuviera realmente abierto, porque esta línea nunca se conectó cuando
+  // se sacaron los demás datos mock (ver comentario más abajo, specs).
+  setText('chat-equipo-info', `${a.nombre} · ${id}`);
+
   const banner = document.getElementById('ficha-status-banner');
   if (banner) {
     banner.classList.remove('stopped', 'maintenance');

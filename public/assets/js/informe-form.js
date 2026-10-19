@@ -324,6 +324,12 @@ function validarInforme(){
 // de camino (ver pendingDestino === 'informe' en auth.js).
 export function abrirFormularioInforme(){
   document.getElementById('informe-tecnico').textContent = welcomeName.textContent || 'usuario';
+  // Quedaban con el texto de demo fijo ("Camión MT65S" / "TS-CAEX-0000125")
+  // sin importar qué activo estuviera realmente abierto — mismo descuido que
+  // el encabezado del Asistente Técnico (ver aplicarActivo en scan.js).
+  const activo = ACTIVOS[activoActualId];
+  document.getElementById('informe-equipo').textContent = activo ? activo.nombre : '—';
+  document.getElementById('informe-id-tagsense').textContent = activoActualId || '—';
   const ahora = new Date();
   informeFechaISO = ahora.toISOString().slice(0, 10);
   document.getElementById('informe-fecha').textContent = ahora.toLocaleDateString('es-CL', {
