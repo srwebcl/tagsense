@@ -24,6 +24,9 @@ export function AdminTopbar({ userName }: { userName: string }) {
         </span>
       </a>
       <div className="admin-topbar-actions">
+        <a href="/admin/users" className="admin-user-chip" style={{ textDecoration: "none" }}>
+          Usuarios
+        </a>
         <span className="admin-user-chip">{userName}</span>
         <button type="button" className="admin-signout" onClick={handleSignOut}>
           Cerrar sesión
