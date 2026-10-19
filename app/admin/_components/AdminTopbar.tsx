@@ -2,7 +2,16 @@
 
 export function AdminTopbar({ userName }: { userName: string }) {
   async function handleSignOut() {
-    await fetch("/api/auth/sign-out", { method: "POST" });
+    // Sin Content-Type ni body, el proxy de Neon Auth (@neondatabase/auth)
+    // reenvía la petición con un body vacío como string — undici le pone
+    // Content-Type: text/plain por default, y el servidor de Neon Auth lo
+    // rechaza con 415 (nunca llega a borrar las cookies de sesión). Mandar
+    // un body JSON explícito evita ese default.
+    await fetch("/api/auth/sign-out", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
     window.location.href = "/admin/login";
   }
 
