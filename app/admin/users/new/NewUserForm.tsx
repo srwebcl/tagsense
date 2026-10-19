@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { crearUsuario, type EstadoCrearUsuario } from "@/app/admin/users/actions";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
+import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/roles";
 
 const ESTADO_INICIAL: EstadoCrearUsuario = {};
 
@@ -13,7 +14,7 @@ export function NewUserForm() {
     return (
       <div className="admin-panel">
         <p className="sub" style={{ marginBottom: 10 }}>
-          Usuario creado: <b>{estado.exito.email}</b>. Pasale esta contraseña por un canal seguro — no se vuelve a
+          Usuario creado: <b>{estado.exito.email}</b>. Pásale esta contraseña por un canal seguro — no se vuelve a
           mostrar:
         </p>
         <code style={{ display: "block", background: "var(--bg-1)", padding: "10px 12px", borderRadius: 8, fontSize: 14, marginBottom: 14, userSelect: "all" }}>
@@ -49,15 +50,16 @@ export function NewUserForm() {
 
         <div className="field">
           <label>Rol</label>
-          <div className="chip-group">
-            <input type="radio" name="role" id="role-technician" value="technician" defaultChecked />
-            <label htmlFor="role-technician">Técnico</label>
-
-            <input type="radio" name="role" id="role-maintainer" value="maintainer" />
-            <label htmlFor="role-maintainer">Mantenedor</label>
-
-            <input type="radio" name="role" id="role-admin" value="admin" />
-            <label htmlFor="role-admin">Admin</label>
+          <div className="role-option-group">
+            {ROLES.map((rol) => (
+              <div key={rol}>
+                <input type="radio" name="role" id={`role-${rol}`} value={rol} defaultChecked={rol === "technician"} />
+                <label htmlFor={`role-${rol}`}>
+                  <span className="role-option-title">{ROLE_LABELS[rol]}</span>
+                  <span className="role-option-desc">{ROLE_DESCRIPTIONS[rol]}</span>
+                </label>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -68,7 +70,7 @@ export function NewUserForm() {
         ) : null}
 
         <p className="sub" style={{ marginBottom: 14 }}>
-          La contraseña se genera automáticamente y se muestra una vez al crear el usuario — no la elegís acá.
+          La contraseña se genera automáticamente y se muestra una vez al crear el usuario — no se elige aquí.
         </p>
 
         <SubmitButton>Crear usuario</SubmitButton>

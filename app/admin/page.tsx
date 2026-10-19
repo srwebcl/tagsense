@@ -27,7 +27,7 @@ export default async function AdminHomePage() {
 
   return (
     <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} />
+      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
       <div className="admin-container">
         <div className="admin-page-head">
           <div>

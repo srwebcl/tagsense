@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-
-const ROLE_LABELS: Record<string, string> = { admin: "Admin", technician: "Técnico", maintainer: "Mantenedor" };
+import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/roles";
 
 export function RoleSelect({
   userId,
@@ -22,6 +21,7 @@ export function RoleSelect({
       <select
         value={rol}
         disabled={pending}
+        title={ROLE_DESCRIPTIONS[rol as keyof typeof ROLE_DESCRIPTIONS]}
         onChange={(e) => {
           const nuevo = e.target.value;
           const anterior = rol;
@@ -37,9 +37,9 @@ export function RoleSelect({
           });
         }}
       >
-        {Object.entries(ROLE_LABELS).map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
+        {ROLES.map((value) => (
+          <option key={value} value={value} title={ROLE_DESCRIPTIONS[value]}>
+            {ROLE_LABELS[value]}
           </option>
         ))}
       </select>

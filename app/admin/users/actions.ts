@@ -4,13 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { auth } from "@/lib/auth/server";
-
-const ROLES = ["admin", "technician", "maintainer"] as const;
-type Rol = (typeof ROLES)[number];
-
-function esRolValido(valor: string): valor is Rol {
-  return (ROLES as readonly string[]).includes(valor);
-}
+import { esRolValido } from "@/lib/roles";
 
 function generarContrasenaSegura(): string {
   // Sin 0/O/1/l/I para que no se confundan al transcribirla a mano en terreno.

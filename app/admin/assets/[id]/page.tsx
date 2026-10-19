@@ -56,7 +56,7 @@ export default async function AssetDetailPage({
   if (!asset) {
     return (
       <>
-        <AdminTopbar userName={appUser.full_name || appUser.email} />
+        <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
         <div className="admin-container">
           <div className="admin-empty">Activo no encontrado.</div>
         </div>
@@ -85,7 +85,7 @@ export default async function AssetDetailPage({
 
   return (
     <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} />
+      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
       <div className="admin-container" style={{ maxWidth: 640 }}>
         <Link href="/admin" className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">

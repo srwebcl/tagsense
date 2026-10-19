@@ -15,7 +15,7 @@ export default async function NewAssetPage() {
 
   return (
     <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} />
+      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
       <div className="admin-container" style={{ maxWidth: 560 }}>
         <Link href="/admin" className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
