@@ -84,8 +84,24 @@ type ChunkConScore<T> = T & { _keywordScore: number };
 // Array.prototype.sort es estable (garantizado desde ES2019) — entre chunks
 // con el mismo puntaje de palabras clave (empezando por 0, es decir ninguna
 // coincidencia), se conserva el orden original por similitud vectorial.
-function reordenarPorPalabrasClave<T extends { content: string }>(chunks: T[], keywords: string[]): ChunkConScore<T>[] {
-  const conScore = chunks.map((c) => ({ ...c, _keywordScore: keywords.length ? contarCoincidencias(normalizarTexto(c.content), keywords) : 0 }));
+//
+// Cuando el técnico toca un tile de síntoma ("Tengo una falla en los frenos")
+// en vez de escribir una pregunta libre, viene con category_slug="frenos" —
+// un bono enorme asegura que el documento de ESA categoría exacta (si el admin
+// cargó una ficha para ella, ver crearInformacionSimulada) siempre quede
+// primero, sin depender de que el re-ranking por palabras adivine bien.
+const BONO_CATEGORIA_EXACTA = 1000;
+
+function reordenarPorPalabrasClave<T extends { content: string; category_slug: string | null }>(
+  chunks: T[],
+  keywords: string[],
+  categorySlug: string | null
+): ChunkConScore<T>[] {
+  const conScore = chunks.map((c) => {
+    const scoreKeywords = keywords.length ? contarCoincidencias(normalizarTexto(c.content), keywords) : 0;
+    const bono = categorySlug && c.category_slug === categorySlug ? BONO_CATEGORIA_EXACTA : 0;
+    return { ...c, _keywordScore: scoreKeywords + bono };
+  });
   return conScore.sort((a, b) => b._keywordScore - a._keywordScore);
 }
 
@@ -107,6 +123,7 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   const body = await request.json().catch(() => null);
   const assetId = body?.asset_id;
   const message = typeof body?.message === "string" ? body.message.trim() : "";
+  const categorySlug = typeof body?.category_slug === "string" && body.category_slug ? body.category_slug : null;
   if (!assetId || !message) {
     return Response.json({ error: { code: "bad_request", message: "Falta asset_id o message." } }, { status: 400 });
   }
@@ -128,7 +145,7 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   // debe poder recuperar contexto de otro tenant (ver skill rag-assistant).
   // Se incluyen documentos asociados directo a este activo o a su modelo.
   const chunksResult = await pool.query(
-    `select dc.content, ad.title, ad.id as document_id,
+    `select dc.content, ad.title, ad.id as document_id, ad.category_slug,
             dc.embedding <=> $1::vector as distance
      from document_chunks dc
      join asset_documents ad on ad.id = dc.document_id
@@ -140,8 +157,26 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
     [toVectorLiteral(queryVector), appUser.tenant_id, assetId, asset.model, TOP_K]
   );
 
+  // Si vino de un tile de síntoma (category_slug), el chunk de esa categoría
+  // exacta puede no colarse en el TOP_K por similitud vectorial pura (ocurre
+  // con fichas simuladas cortas) — se trae aparte y se funde con el resto,
+  // para no depender de que el embedding "adivine" que es el más relevante.
+  let candidatos = chunksResult.rows;
+  if (categorySlug) {
+    const categoriaResult = await pool.query(
+      `select dc.content, ad.title, ad.id as document_id, ad.category_slug
+       from document_chunks dc
+       join asset_documents ad on ad.id = dc.document_id
+       where dc.tenant_id = $1 and ad.asset_id = $2 and ad.category_slug = $3 and ad.index_status = 'indexed'
+       order by dc.chunk_index asc`,
+      [appUser.tenant_id, assetId, categorySlug]
+    );
+    const yaIncluidos = new Set(candidatos.map((c) => c.content));
+    candidatos = [...candidatos, ...categoriaResult.rows.filter((c) => !yaIncluidos.has(c.content))];
+  }
+
   const keywords = extraerPalabrasClave(message, asset.name);
-  const chunksOrdenados = reordenarPorPalabrasClave(chunksResult.rows, keywords);
+  const chunksOrdenados = reordenarPorPalabrasClave(candidatos, keywords, categorySlug);
 
   const sources = [...new Set(chunksOrdenados.map((r) => r.title))];
 
@@ -175,7 +210,7 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
     // de Anthropic) en vez de mostrar un error.
     console.error(`[assistant/chat] Claude no disponible, usando respaldo extractivo (tenant ${appUser.tenant_id}, asset ${assetId}):`, err);
     fallback = true;
-    answer = construirRespuestaRespaldo(asset.name, chunksOrdenados, keywords);
+    answer = construirRespuestaRespaldo(asset.name, chunksOrdenados, keywords, categorySlug);
   }
 
   await pool.query(
@@ -245,7 +280,12 @@ function extraerVentanaCentrada(texto: string, keywords: string[], maxChars: num
   return texto.slice(0, maxChars).trim() + "…";
 }
 
-function construirRespuestaRespaldo(nombreActivo: string, chunks: { content: string; title: string }[], keywords: string[]): string {
+function construirRespuestaRespaldo(
+  nombreActivo: string,
+  chunks: { content: string; title: string; category_slug: string | null }[],
+  keywords: string[],
+  categorySlug: string | null
+): string {
   if (chunks.length === 0) {
     return `No encuentro documentación cargada todavía para "${nombreActivo}". Puedes subir un manual o agregar información simulada desde el panel de administración.`;
   }
@@ -255,12 +295,18 @@ function construirRespuestaRespaldo(nombreActivo: string, chunks: { content: str
   const vistos = new Set<string>();
 
   for (const chunk of chunks) {
+    // Si el chunk viene de la categoría exacta que tocó el técnico, cada
+    // oración suya es relevante por definición (el admin la escribió
+    // específicamente para esa categoría) — no depende de que además
+    // contenga alguna palabra literal de la pregunta.
+    const esDeCategoriaExacta = Boolean(categorySlug && chunk.category_slug === categorySlug);
     for (const oracion of dividirEnOraciones(chunk.content)) {
       const normalizada = normalizarTexto(oracion);
       if (vistos.has(normalizada)) continue; // los chunks se solapan al indexar (ver CHUNK_OVERLAP en lib/indexing.ts)
       vistos.add(normalizada);
-      const score = keywords.length ? contarCoincidencias(normalizada, keywords) : 0;
-      if (keywords.length > 0 && score === 0) continue; // sin ninguna palabra de la pregunta, no sirve de respuesta
+      const scoreKeywords = keywords.length ? contarCoincidencias(normalizada, keywords) : 0;
+      if (!esDeCategoriaExacta && keywords.length > 0 && scoreKeywords === 0) continue; // sin ninguna palabra de la pregunta, no sirve de respuesta
+      const score = scoreKeywords + (esDeCategoriaExacta ? BONO_CATEGORIA_EXACTA : 0);
       const texto = extraerVentanaCentrada(oracion, keywords, FALLBACK_MAX_CHARS_ORACION);
       oraciones.push({ texto, titulo: chunk.title, score });
     }

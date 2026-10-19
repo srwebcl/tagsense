@@ -9,6 +9,7 @@ import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
 import { indexDocument, indexSimulatedText } from "@/lib/indexing";
 import { detectImageKind, isPdf } from "@/lib/file-validation";
+import { listarCategoriasFalla, slugificar } from "@/lib/fault-categories";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
   const n = parseInt(String(raw || "").trim(), 10);
@@ -278,20 +279,18 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   redirect(`/admin/assets/${assetId}`);
 }
 
-// Para un activo recién creado que todavía no tiene un manual PDF real: el
-// admin escribe/pega la información técnica a mano y entra al MISMO pipeline
-// de indexado (chunking + embeddings) que un PDF subido — así el asistente
-// IA también "funciona" para este activo, sin mezclar su contexto con el de
-// ningún otro (document_chunks sigue filtrando por asset_id, igual que con un
-// documento real — ver app/api/assistant/chat/route.ts).
-export async function crearInformacionSimulada(assetId: string, formData: FormData) {
+// Constructor de ficha por categoría — para un activo sin manual PDF real, el
+// admin escribe/pega la info técnica POR SISTEMA (Frenos, Dirección, etc., ver
+// fault_categories) en vez de un solo bloque de texto. Cada categoría llena se
+// guarda como su propio documento "simulado" (una categoría = un documento =
+// casi siempre un solo chunk), entra al MISMO pipeline de indexado que un PDF
+// subido, y queda etiquetada con category_slug — así cuando el técnico toca el
+// tile de "Frenos" en la app de campo, el asistente sabe con certeza cuál
+// documento usar en vez de adivinar por similitud semántica (ver
+// app/api/assistant/chat/route.ts). Categorías que llegan vacías borran su
+// documento si ya existía (el admin se arrepintió o lo limpió).
+export async function guardarFichaPorCategorias(assetId: string, formData: FormData) {
   const appUser = await requireAdmin();
-
-  const title = String(formData.get("title") || "").trim();
-  const content = String(formData.get("content") || "").trim();
-  if (!title || !content) {
-    throw new Error("Falta el título o el contenido de la información simulada.");
-  }
 
   const assetResult = await pool.query(
     `select id from assets where tenant_id = $1 and id = $2 limit 1`,
@@ -301,15 +300,75 @@ export async function crearInformacionSimulada(assetId: string, formData: FormDa
     throw new Error("Activo no encontrado.");
   }
 
-  const docResult = await pool.query(
-    `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, uploaded_by)
-     values ($1, $2, $3, null, $4, 'simulated', $5)
-     returning id`,
-    [appUser.tenant_id, assetId, title, content, appUser.id]
-  );
+  const categorias = await listarCategoriasFalla(appUser.tenant_id);
 
-  const documentId = docResult.rows[0].id;
-  after(() => indexSimulatedText(documentId, appUser.tenant_id));
+  const existentesResult = await pool.query(
+    `select id, category_slug from asset_documents
+     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated' and category_slug is not null`,
+    [appUser.tenant_id, assetId]
+  );
+  const existentesPorSlug = new Map<string, string>(existentesResult.rows.map((r) => [r.category_slug, r.id]));
+
+  const documentosAIndexar: string[] = [];
+
+  for (const categoria of categorias) {
+    const contenido = String(formData.get(`cat_${categoria.slug}`) || "").trim();
+    const existenteId = existentesPorSlug.get(categoria.slug);
+
+    if (!contenido) {
+      if (existenteId) {
+        await pool.query(`delete from asset_documents where tenant_id = $1 and id = $2`, [appUser.tenant_id, existenteId]);
+      }
+      continue;
+    }
+
+    if (existenteId) {
+      await pool.query(`update asset_documents set raw_text = $1, title = $2 where tenant_id = $3 and id = $4`, [
+        contenido,
+        categoria.name,
+        appUser.tenant_id,
+        existenteId,
+      ]);
+      documentosAIndexar.push(existenteId);
+    } else {
+      const docResult = await pool.query(
+        `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, category_slug, uploaded_by)
+         values ($1, $2, $3, null, $4, 'simulated', $5, $6)
+         returning id`,
+        [appUser.tenant_id, assetId, categoria.name, contenido, categoria.slug, appUser.id]
+      );
+      documentosAIndexar.push(docResult.rows[0].id);
+    }
+  }
+
+  for (const documentId of documentosAIndexar) {
+    after(() => indexSimulatedText(documentId, appUser.tenant_id));
+  }
+
+  revalidatePath(`/admin/assets/${assetId}`);
+  redirect(`/admin/assets/${assetId}`);
+}
+
+// Catálogo de categorías de falla — mismo patrón que registrarTipoDeActivo:
+// crece desde el punto de uso (el propio constructor de ficha), sin pantalla
+// de administración aparte. Es tenant-wide (no por activo), por eso no valida
+// el assetId más que para saber a dónde volver después.
+export async function crearCategoriaFalla(assetId: string, formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const nombre = String(formData.get("nombre_categoria") || "").trim();
+  if (!nombre) {
+    throw new Error("Falta el nombre de la categoría.");
+  }
+  const slug = slugificar(nombre);
+  if (!slug) {
+    throw new Error("El nombre de la categoría no es válido.");
+  }
+
+  await pool.query(
+    `insert into fault_categories (tenant_id, slug, name) values ($1, $2, $3) on conflict (tenant_id, slug) do nothing`,
+    [appUser.tenant_id, slug, nombre]
+  );
 
   revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);

@@ -27,6 +27,7 @@ let chatInitialized = false;
 let chatGeneracion = 0;
 
 export function initChat(){
+  cargarCategoriasFalla();
   if (chatInitialized) { chatMessages.scrollTop = chatMessages.scrollHeight; return; }
   chatInitialized = true;
   const activo = ACTIVOS[activoActualId];
@@ -165,7 +166,7 @@ function escalarASupervisor(){
   window.open(url, '_blank');
 }
 
-async function enviarPregunta(texto){
+async function enviarPregunta(texto, categorySlug){
   const limpio = texto.trim();
   if (!limpio) return;
   document.getElementById('symptom-grid').classList.add('hidden');
@@ -191,7 +192,7 @@ async function enviarPregunta(texto){
     const resp = await fetch('/api/assistant/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asset_id: activo.id, message: limpio }),
+      body: JSON.stringify({ asset_id: activo.id, message: limpio, category_slug: categorySlug || null }),
     });
     // El chat se reinició (botón "+ Nuevo") mientras esta respuesta estaba
     // en camino — no la pegamos a la conversación nueva.
@@ -215,8 +216,11 @@ async function enviarPregunta(texto){
 }
 
 // Preguntas de partida por sistema — solo sirven para no tener que escribir;
-// la respuesta real siempre sale de los documentos indexados de este activo,
-// nunca de una base de conocimiento fija por aquí.
+// la respuesta real siempre sale de los documentos indexados de este activo
+// (o de la ficha por categoría que haya cargado el admin), nunca de una base
+// de conocimiento fija por acá. Las 8 categorías originales tienen una
+// pregunta más natural escrita a mano; una categoría nueva que agregue el
+// admin (ver fault_categories) usa el texto genérico.
 const SYMPTOM_QUERIES = {
   frenos: 'Tengo una falla en los frenos',
   direccion: 'Tengo una falla en la dirección',
@@ -228,12 +232,51 @@ const SYMPTOM_QUERIES = {
   temperatura: 'Tengo una falla de temperatura en el motor',
 };
 
-document.querySelectorAll('.symptom-tile').forEach(tile => {
-  tile.addEventListener('click', () => {
-    const query = SYMPTOM_QUERIES[tile.dataset.symptom];
-    if (query) enviarPregunta(query);
-  });
-});
+// Mismos íconos que antes estaban fijos en el HTML para las 8 categorías
+// originales — una categoría nueva que agregue el admin usa un ícono genérico
+// (no tiene forma de adivinar uno específico para, por ejemplo, "Neumáticos").
+const SYMPTOM_ICONS = {
+  frenos: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#c91233" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#c91233"/></svg>',
+  direccion: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#c91233" stroke-width="1.7"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#c91233" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  tolva: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 17h13l4-8H7L3 17Z" stroke="#c91233" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7" cy="19" r="1.6" stroke="#c91233" stroke-width="1.5"/><circle cx="16" cy="19" r="1.6" stroke="#c91233" stroke-width="1.5"/></svg>',
+  electrico: '<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  hidraulico: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#c91233" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+  ejes: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#c91233" stroke-width="1.7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="#c91233" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  sensores: '<svg viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="10" rx="2" stroke="#c91233" stroke-width="1.7"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="#c91233" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  temperatura: '<svg viewBox="0 0 24 24" fill="none"><path d="M10 14.76V4a2 2 0 1 1 4 0v10.76a4 4 0 1 1-4 0Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+};
+const ICONO_GENERICO = '<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4L14.7 6.3Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
+const symptomGridItems = document.getElementById('symptom-grid-items');
+let categoriasFallaCargadas = false;
+
+async function cargarCategoriasFalla(){
+  if (categoriasFallaCargadas || !symptomGridItems) return;
+  try {
+    const resp = await fetch('/api/fault-categories');
+    if (!resp.ok) return;
+    const data = await resp.json().catch(() => null);
+    const categorias = (data && data.categorias) || [];
+    if (categorias.length === 0) return;
+
+    categoriasFallaCargadas = true;
+    symptomGridItems.innerHTML = '';
+    categorias.forEach(categoria => {
+      const tile = document.createElement('div');
+      tile.className = 'symptom-tile';
+      tile.innerHTML = `${SYMPTOM_ICONS[categoria.slug] || ICONO_GENERICO}<span></span>`;
+      tile.querySelector('span').textContent = categoria.name;
+      tile.addEventListener('click', () => {
+        const query = SYMPTOM_QUERIES[categoria.slug] || `Tengo una falla en ${categoria.name.toLowerCase()}`;
+        enviarPregunta(query, categoria.slug);
+      });
+      symptomGridItems.appendChild(tile);
+    });
+  } catch (err) {
+    // Sin red: el grid queda vacío, pero el input de texto libre sigue
+    // disponible — no es el único camino para preguntarle al asistente.
+  }
+}
 
 chatInput.addEventListener('input', () => {
   chatSendBtn.disabled = chatInput.value.trim().length === 0;

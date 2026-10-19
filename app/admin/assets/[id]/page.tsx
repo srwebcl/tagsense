@@ -3,18 +3,21 @@ import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import {
   subirDocumento,
-  crearInformacionSimulada,
+  guardarFichaPorCategorias,
+  crearCategoriaFalla,
   reindexarDocumento,
   eliminarActivo,
   subirFotoActivo,
   resolverSolicitudAdmin,
 } from "@/app/admin/assets/actions";
 import { uploads } from "@/lib/storage";
+import { listarCategoriasFalla } from "@/lib/fault-categories";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
 import { CopyTagLinkButton } from "@/app/admin/_components/CopyTagLinkButton";
+import { NuevaCategoriaForm } from "@/app/admin/_components/NuevaCategoriaForm";
 
 const STATUS_LABEL: Record<string, string> = {
   operativo: "Operativo",
@@ -78,6 +81,14 @@ export default async function AssetDetailPage({
     [appUser.tenant_id, id]
   );
 
+  const categorias = await listarCategoriasFalla(appUser.tenant_id);
+  const fichaActualResult = await pool.query(
+    `select category_slug, raw_text from asset_documents
+     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated' and category_slug is not null`,
+    [appUser.tenant_id, id]
+  );
+  const fichaActualPorSlug = new Map<string, string>(fichaActualResult.rows.map((r) => [r.category_slug, r.raw_text || ""]));
+
   const solicitudesResult = await pool.query(
     `select id, folio, tipo, prioridad, componente, descripcion, estado, created_at, resolved_at
      from maintenance_requests where tenant_id = $1 and asset_id = $2 order by created_at desc`,
@@ -85,7 +96,8 @@ export default async function AssetDetailPage({
   );
 
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
-  const crearInformacionSimuladaDeEsteActivo = crearInformacionSimulada.bind(null, id);
+  const guardarFichaDeEsteActivo = guardarFichaPorCategorias.bind(null, id);
+  const crearCategoriaDeEsteActivo = crearCategoriaFalla.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
   const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
@@ -303,43 +315,45 @@ export default async function AssetDetailPage({
         </div>
 
         <div className="admin-panel">
-          <p className="section-label" style={{ marginBottom: 8 }}>Información simulada (sin manual real)</p>
+          <p className="section-label" style={{ marginBottom: 8 }}>Ficha por categoría (sin manual real)</p>
           <p className="sub" style={{ marginBottom: 18 }}>
-            ¿Todavía no tienes el manual PDF de este activo? Escribe acá la información técnica a mano
-            (especificaciones, fallas comunes, procedimientos) para que el asistente IA igual pueda responder sobre
-            este activo — se indexa exactamente igual que un documento subido, y solo se usa para este activo.
+            ¿Todavía no tienes el manual PDF de este activo? Completa la info técnica por sistema — son las mismas
+            categorías que ve el técnico en el Asistente (&quot;Tengo una falla en...&quot;). Cada categoría que
+            llenes se indexa por separado, así el asistente responde con precisión cuando el técnico toca ese tile
+            puntual, sin depender de que Anthropic tenga saldo. Deja en blanco las que no apliquen a este activo.
           </p>
-          <form action={crearInformacionSimuladaDeEsteActivo}>
-            <div className="field">
-              <label>Título <span className="req">*</span></label>
-              <div className="input-wrap">
-                <input name="title" required placeholder="Información técnica (simulada)" />
-              </div>
+          <form action={guardarFichaDeEsteActivo}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 18 }}>
+              {categorias.map((categoria) => (
+                <div key={categoria.slug} className="field" style={{ marginBottom: 0 }}>
+                  <label>{categoria.name}</label>
+                  <textarea
+                    name={`cat_${categoria.slug}`}
+                    rows={4}
+                    defaultValue={fichaActualPorSlug.get(categoria.slug) || ""}
+                    placeholder={`Especificaciones, fallas comunes y procedimientos de ${categoria.name.toLowerCase()} para este activo…`}
+                    style={{
+                      width: "100%",
+                      background: "var(--graphite)",
+                      border: "1.5px solid var(--graphite-line)",
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                      color: "var(--text-hi)",
+                      fontSize: 14,
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+              ))}
             </div>
 
-            <div className="field">
-              <label>Contenido <span className="req">*</span></label>
-              <textarea
-                name="content"
-                required
-                rows={8}
-                placeholder="Ej: Presión de neumáticos recomendada 110 PSI. Cambio de aceite de motor cada 500 horas. Falla común: sensor de temperatura del sistema hidráulico se desconecta con vibración — revisar conector antes de reemplazar el sensor…"
-                style={{
-                  width: "100%",
-                  background: "var(--graphite)",
-                  border: "1.5px solid var(--graphite-line)",
-                  borderRadius: 12,
-                  padding: "12px 14px",
-                  color: "var(--text-hi)",
-                  fontSize: 14,
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                }}
-              />
-            </div>
-
-            <SubmitButton>Guardar información simulada</SubmitButton>
+            <SubmitButton>Guardar ficha</SubmitButton>
           </form>
+
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--graphite-line)" }}>
+            <NuevaCategoriaForm action={crearCategoriaDeEsteActivo} />
+          </div>
         </div>
 
         <div className="danger-zone">
