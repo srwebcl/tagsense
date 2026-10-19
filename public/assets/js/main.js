@@ -13,11 +13,11 @@ import { requiereLogin, confirmarSesionInicial } from './auth.js';
 import { cargarSolicitudes } from './solicitudes.js';
 import { abrirFormularioInforme } from './informe-form.js';
 import { actualizarBadgePendientes, sincronizarInformesPendientes } from './informe-sync.js';
+import { initChat } from './asistente.js';
 
 // Módulos que solo necesitan cargarse (registran sus propios listeners al
 // evaluarse) — no se usa ningún export acá directamente.
 import './manual-code.js';
-import './asistente.js';
 import './ui-misc.js';
 import './documentos.js';
 import './instructivos.js';
@@ -46,6 +46,16 @@ document.getElementById('btn-informe-confirm3').addEventListener('click', async 
 document.getElementById('report-fab').addEventListener('click', async () => {
   if (await requiereLogin('informe')) return;
   abrirFormularioInforme();
+});
+
+// El asistente llama a Claude/Voyage con datos reales del tenant — necesita
+// sesión igual que la ficha técnica y el informe.
+document.querySelectorAll('.btn-asistente').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (await requiereLogin('asistente')) return;
+    goTo('step-asistente');
+    initChat();
+  });
 });
 
 // ---- Arranque: escanear es lo primero, el login se pide después ----

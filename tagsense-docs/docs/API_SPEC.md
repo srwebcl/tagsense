@@ -20,7 +20,7 @@ PATCH  /api/assets/:id              -> actualizar activo (admin)
 
 ## Documentos (manuales OEM)
 ```
-GET    /api/assets/:id/documents
+GET    /api/assets/:tag_code/documents -> lista real de documentos subidos para el activo (URL firmada, 1h)
 POST   /api/assets/:id/documents    -> sube manual (multipart), dispara job de indexado (chunking + embeddings)
 DELETE /api/documents/:id
 ```

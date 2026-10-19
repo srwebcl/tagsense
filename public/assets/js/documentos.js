@@ -1,139 +1,63 @@
 'use strict';
 
-// ================= LECTOR DE DOCUMENTOS =================
+// ================= DOCUMENTOS (manuales reales subidos por el admin) =================
+// Antes esta pantalla mostraba un manual fijo hardcodeado (MT65S) para
+// cualquier activo. Ahora lista los documentos reales que el admin subió
+// para ESTE activo (GET /api/assets/:tag_code/documents) y abre el PDF real
+// — el mismo documento que el asistente usa como fuente (ver asistente.js).
 
 import { goTo, escapeHtml } from './core.js';
+import { activoActualId } from './scan.js';
 
-const DOC_DATA = {"manual": {"titulo": "Manual Técnico", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Rev. 3 · Actualizado 10/01/2024", "sections": [{"h": "1. Introducción y datos generales", "p": ["Este manual técnico corresponde al Camión Minero MT65S, equipo de acarreo pesado utilizado en las operaciones de Mina Rajo Sur, Banco 12, bajo la propiedad de Minera Andina S.A.", "El equipo está identificado en TAGSENSE bajo el ID TS-CAEX-0000125, con número de serie CAT0MT65SFKY100123, año de fabricación 2021."], "table": [["Especificación", "Valor"], ["Peso operacional", "62.000 kg"], ["Capacidad de carga", "65 toneladas"], ["Motor", "Diésel, 390 kW (523 HP)"], ["Horómetro de referencia", "8.745 h"]]}, {"h": "2. Procedimientos de bloqueo (LOTO)", "p": ["Antes de cualquier intervención mecánica o eléctrica en el MT65S, debe ejecutarse el procedimiento de bloqueo y etiquetado (LOTO):"], "list": ["Notificar al supervisor de turno antes de iniciar la intervención.", "Colocar candado personal y tarjeta en el desconectador de batería y en la llave de corte hidráulico.", "Verificar energía cero: intentar encender el equipo; debe fallar.", "Solo entonces iniciar la intervención sobre el equipo."], "note": "Nunca usar el candado de otra persona ni retirar una tarjeta que no fue colocada por uno mismo."}, {"h": "3. Plan de lubricación", "p": ["El cambio de aceite de motor debe realizarse cada 500 horas de horómetro. Los filtros asociados (aceite y aire) deben inspeccionarse en cada mantención programada."], "table": [["Componente", "Código", "Intervalo"], ["Filtro de aceite de motor", "RP-0231", "Cada 500h"], ["Filtro de aire", "RP-0198", "Cada 500h / según indicador de restricción"], ["Aceite de motor", "—", "Cada 500h"]]}, {"h": "4. Sistema de refrigeración", "p": ["Temperatura de operación normal: hasta 100°C. Sobre 105°C se considera sobretemperatura.", "Ante una alerta de sobretemperatura: detener el equipo en un lugar seguro sin apagar el motor de inmediato, dejarlo en ralentí de 3 a 5 minutos antes de apagar (evita choque térmico en el turbo), y revisar el nivel de refrigerante solo con el motor frío.", "Verificar que el radiador no presente obstrucción por material particulado, condición frecuente en las operaciones de Rajo Sur."]}, {"h": "5. Sistema eléctrico y arranque", "p": ["Si el equipo no enciende, verificar en este orden: 1) desconectador de batería (puede quedar abierto tras un LOTO), 2) bornes de batería por corrosión, condición frecuente en ambiente de mina, 3) motor de arranque si hay clic pero no arranca."]}, {"h": "6. Sistema hidráulico de volteo", "p": ["El sistema de volteo de tolva opera con una bomba hidráulica de engranajes (caudal nominal 85 L/min) y un cilindro de volteo telescópico con carrera de 1.850 mm.", "Presión máxima de sistema: 210 bar. Presión de trabajo normal: 180-195 bar.", "Antes de operar, verificar el nivel de aceite hidráulico con la tolva abajo y el motor apagado. Si la tolva sube lenta o no sube, revisar primero el filtro de succión antes de sospechar de la bomba.", "Ver diagrama completo del circuito en el documento «Plano Hidráulico» de esta ficha."]}, {"h": "7. Sistema de frenos", "p": ["Torque de pernos de caliper: 180-210 Nm. Espesor mínimo de pastilla antes de reemplazo: 8mm.", "Vibración al frenar sugiere disco alabeado, no únicamente desgaste de pastilla."], "table": [["Componente", "Código", "Estado stock"], ["Pastillas de freno", "RP-0456", "Bajo stock"]]}, {"h": "8. Sistema de suspensión", "p": ["Rango normal de presión de cilindros de suspensión delantera en vacío: 5,5-6,2 MPa.", "Vibración excesiva en marcha vacía suele deberse a desalineación o neumático desbalanceado, no siempre a la suspensión. Fuga visible de aceite en un cilindro de suspensión debe reportarse: compromete la geometría de manejo."]}, {"h": "9. Neumáticos y llantas", "p": ["Medida: 26.5R25. Presión recomendada en carga: 620-650 kPa.", "Desgaste irregular puede indicar problema de alineación o de suspensión, no solo del neumático."], "table": [["Componente", "Código", "Estado stock"], ["Neumático 26.5R25", "RP-0789", "Sin stock"]]}, {"h": "10. Diagnóstico de códigos de falla", "table": [["Código", "Descripción", "Acción"], ["E-02", "Baja presión de aceite", "Detener el equipo de inmediato"], ["E-04", "Sobretemperatura de motor", "Reducir carga y detener en lugar seguro"], ["E-07", "Falla en sensor de presión hidráulica", "Reportar; no operar el sistema de volteo"]], "note": "Si un código persiste tras reiniciar el equipo (apagar 30 segundos y encender), no continuar operando. Reportar el hallazgo con fotografía del panel."}, {"h": "Anexo A — Tabla de torques", "table": [["Elemento", "Torque"], ["Pernos de rueda", "650-700 Nm"], ["Pernos de caliper de freno", "180-210 Nm"], ["Pernos de tapa de motor", "45-55 Nm"]], "note": "Usar siempre llave torquímetra calibrada. Un perno mal apretado en rueda es causa de incidentes graves."}]}, "garantia": {"titulo": "Certificado de Garantía", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Vigente hasta 12/2026", "sections": [{"h": "Datos del equipo", "table": [["Modelo", "MT65S"], ["Número de serie", "CAT0MT65SFKY100123"], ["Año de fabricación", "2021"], ["Propietario", "Minera Andina S.A."], ["Fecha de entrega", "15/03/2021"], ["Vigencia de garantía", "Hasta 12/2026"]]}, {"h": "Cobertura de garantía", "p": ["El fabricante garantiza el Camión Minero MT65S contra defectos de material y fabricación, bajo las siguientes coberturas y plazos contados desde la fecha de entrega:"], "table": [["Sistema", "Cobertura"], ["Motor", "5 años o 15.000 horas, lo que ocurra primero"], ["Transmisión", "5 años o 15.000 horas, lo que ocurra primero"], ["Sistema hidráulico de volteo", "3 años o 10.000 horas, lo que ocurra primero"], ["Estructura de chasis y tolva", "7 años, sin límite de horas"], ["Sistema eléctrico y electrónico", "2 años o 6.000 horas, lo que ocurra primero"]]}, {"h": "Exclusiones", "p": ["Esta garantía no cubre:"], "list": ["Desgaste normal de piezas de fricción (pastillas de freno, neumáticos, filtros).", "Daños derivados de uso indebido, sobrecarga o negligencia operacional.", "Modificaciones o reparaciones realizadas por talleres no autorizados por el fabricante.", "Falta de cumplimiento del plan de mantención preventiva establecido en el Manual Técnico.", "Uso de repuestos no originales en sistemas críticos (motor, transmisión, sistema hidráulico)."]}, {"h": "Condiciones para mantener la validez de la garantía", "list": ["Realizar todas las mantenciones preventivas en los intervalos indicados en el Manual Técnico MT65S.", "Utilizar exclusivamente repuestos originales o autorizados por el fabricante.", "Mantener registro actualizado de horómetro y mantenciones en TAGSENSE.", "Reportar cualquier falla relevante dentro de las 48 horas siguientes a su detección."]}, {"h": "Procedimiento para reclamos de garantía", "p": ["Ante una falla cubierta por esta garantía, contactar al proveedor autorizado adjuntando: identificación del equipo (ID TAGSENSE), horómetro al momento de la falla, descripción del hallazgo y evidencia fotográfica.", "El proveedor dispone de 5 días hábiles para realizar la evaluación técnica y confirmar la cobertura."]}, {"h": "Vigencia", "p": ["Este certificado es válido hasta diciembre de 2026, sujeto al cumplimiento de las condiciones descritas en este documento."]}]}, "ast": {"titulo": "AST — Análisis de Seguridad del Trabajo", "subtitulo": "Cambio de Filtros", "meta": "Camión Minero MT65S · TS-CAEX-0000125 · 12/05/2024", "sections": [{"h": "Datos generales de la tarea", "table": [["Tarea", "Cambio de filtros (aceite y aire)"], ["Equipo", "Camión Minero MT65S — TS-CAEX-0000125"], ["Ubicación", "Mina Rajo Sur - Banco 12"], ["Fecha", "12/05/2024"], ["Responsable", "Técnico de mantenimiento asignado"], ["Duración estimada", "45 minutos"]]}, {"h": "Equipo de Protección Personal (EPP) requerido", "list": ["Casco con barbiquejo", "Lentes de seguridad", "Guantes de nitrilo resistentes a hidrocarburos", "Zapatos de seguridad con puntera de acero", "Ropa de trabajo manga larga", "Protección auditiva (zona de alto ruido)"]}, {"h": "Pasos de la tarea, peligros y medidas de control", "table": [["N°", "Paso", "Peligro asociado", "Medida de control"], ["1", "Aplicar procedimiento LOTO", "Arranque accidental del motor", "Candado y tarjeta personal en desconectador de batería; verificar energía cero"], ["2", "Dejar enfriar el motor", "Quemaduras por contacto con superficies calientes", "Esperar mínimo 15 min tras el apagado antes de manipular filtros"], ["3", "Retirar filtro de aceite usado", "Contacto con aceite caliente / derrame", "Usar guantes, posicionar bandeja de contención"], ["4", "Retirar filtro de aire usado", "Inhalación de material particulado", "Usar mascarilla, realizar la tarea en zona ventilada"], ["5", "Instalar filtros nuevos (RP-0231 / RP-0198)", "Instalación incorrecta, fugas posteriores", "Verificar torque y sello según Manual Técnico Sección 3.5"], ["6", "Disponer filtros usados", "Contaminación ambiental", "Depositar en contenedor de residuos peligrosos designado"], ["7", "Retirar bloqueo LOTO y probar equipo", "Arranque con personal cerca del equipo", "Verificar zona despejada antes de retirar candado y encender"]]}, {"h": "Aprobación", "p": ["Este AST debe ser revisado y firmado por el técnico ejecutor y el supervisor de turno antes de iniciar la tarea."], "table": [["Rol", "Nombre", "Firma"], ["Técnico ejecutor", "_______________________", "_______________"], ["Supervisor de turno", "_______________________", "_______________"]]}]}, "plano": {"titulo": "Plano Hidráulico", "subtitulo": "Sistema de Volteo — Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Mayo 2023", "sections": [{"h": "Descripción general", "p": ["El sistema hidráulico de volteo del MT65S permite el levante y descenso controlado de la tolva mediante un circuito cerrado compuesto por seis componentes principales."]}, {"img": "plano_hidraulico.png"}, {"h": "Leyenda de componentes", "table": [["N°", "Componente", "Especificación"], ["1", "Estanque de aceite hidráulico", "Capacidad 180 L, aceite ISO VG 46"], ["2", "Bomba hidráulica de engranajes", "Caudal nominal 85 L/min"], ["3", "Válvula direccional 4/3 vías", "Control de subida / retención / bajada de tolva"], ["4", "Cilindro de volteo telescópico", "Carrera 1.850 mm, presión máx. 210 bar"], ["5", "Filtro de retorno", "Elemento de 10 micrones, reemplazo cada 500h"], ["6", "Manguera de alta presión", "Clasificación SAE 100R2, revisión visual diaria"]]}, {"h": "Especificaciones de presión", "table": [["Parámetro", "Valor"], ["Presión máxima de sistema", "210 bar"], ["Presión de trabajo normal", "180-195 bar"]]}, {"h": "Procedimiento básico de revisión de nivel", "list": ["Posicionar la tolva completamente abajo y apagar el motor.", "Esperar a que el sistema se estabilice (sin presión residual).", "Verificar el nivel de aceite en la mirilla del estanque (componente 1).", "Si el nivel está bajo, no operar el sistema hasta reponer y verificar fugas visibles en mangueras y conexiones."]}, {"h": "Referencia", "p": ["Este plano complementa la Sección 6.4 del Manual Técnico MT65S — Sistema hidráulico de volteo."]}]}, "plano_electrico": {"titulo": "Plano Eléctrico", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Contenido de ejemplo", "sections": [{"h": "Contenido de ejemplo", "p": ["Diagrama del sistema eléctrico: distribución de potencia, módulos electrónicos y alimentación 24V del equipo.", "Este documento es un marcador de posición para mostrar la navegación y estructura de TAGSENSE. El contenido técnico real debe ser cargado por el equipo antes de usarse en terreno."], "note": "Contenido no validado — reemplazar con la documentación oficial del fabricante antes de uso operativo."}]}, "plano_neumatico": {"titulo": "Plano Neumático", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Contenido de ejemplo", "sections": [{"h": "Contenido de ejemplo", "p": ["Diagrama del circuito neumático: compresor, válvulas, y actuadores neumáticos del equipo.", "Este documento es un marcador de posición para mostrar la navegación y estructura de TAGSENSE. El contenido técnico real debe ser cargado por el equipo antes de usarse en terreno."], "note": "Contenido no validado — reemplazar con la documentación oficial del fabricante antes de uso operativo."}]}, "manual_servicio": {"titulo": "Manual de Servicio", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Contenido de ejemplo", "sections": [{"h": "Contenido de ejemplo", "p": ["Procedimientos detallados de servicio y mantención mayor del equipo, paso a paso.", "Este documento es un marcador de posición para mostrar la navegación y estructura de TAGSENSE. El contenido técnico real debe ser cargado por el equipo antes de usarse en terreno."], "note": "Contenido no validado — reemplazar con la documentación oficial del fabricante antes de uso operativo."}]}, "inspecciones": {"titulo": "Inspecciones", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Contenido de ejemplo", "sections": [{"h": "Contenido de ejemplo", "p": ["Checklists de inspección periódica pre-uso y programada del equipo.", "Este documento es un marcador de posición para mostrar la navegación y estructura de TAGSENSE. El contenido técnico real debe ser cargado por el equipo antes de usarse en terreno."], "note": "Contenido no validado — reemplazar con la documentación oficial del fabricante antes de uso operativo."}]}, "manual_repuestos": {"titulo": "Manual de Repuestos", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Contenido de ejemplo", "sections": [{"h": "Contenido de ejemplo", "p": ["Despieces, números de parte y componentes asociados al equipo.", "Este documento es un marcador de posición para mostrar la navegación y estructura de TAGSENSE. El contenido técnico real debe ser cargado por el equipo antes de usarse en terreno."], "note": "Contenido no validado — reemplazar con la documentación oficial del fabricante antes de uso operativo."}]}, "aceites": {"titulo": "Aceites y Lubricación", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Plan de lubricación", "sections": [{"h": "Plan de lubricación", "p": ["El cambio de aceite de motor debe realizarse cada 500 horas de horómetro. Los filtros asociados (aceite y aire) deben inspeccionarse en cada mantención programada."], "table": [["Componente", "Código", "Intervalo"], ["Filtro de aceite de motor", "RP-0231", "Cada 500h"], ["Filtro de aire", "RP-0198", "Cada 500h / según indicador de restricción"], ["Aceite de motor", "—", "Cada 500h"]]}, {"h": "Aceite hidráulico", "p": ["El sistema hidráulico de volteo utiliza aceite ISO VG 46, con una capacidad de estanque de 180 L.", "Verificar el nivel con la tolva completamente abajo y el motor apagado, esperando a que el sistema se estabilice."]}, {"h": "Referencia", "p": ["Este documento complementa la Sección 3 del Manual Técnico MT65S — Plan de lubricación."]}]}, "procedimientos": {"titulo": "Procedimientos de Bloqueo (LOTO)", "subtitulo": "Camión Minero MT65S", "meta": "TS-CAEX-0000125 · Seguridad", "sections": [{"h": "Procedimiento de bloqueo y etiquetado", "p": ["Antes de cualquier intervención mecánica o eléctrica en el MT65S, debe ejecutarse el procedimiento de bloqueo y etiquetado (LOTO):"], "list": ["Notificar al supervisor de turno antes de iniciar la intervención.", "Colocar candado personal y tarjeta en el desconectador de batería y en la llave de corte hidráulico.", "Verificar energía cero: intentar encender el equipo; debe fallar.", "Solo entonces iniciar la intervención sobre el equipo."], "note": "Nunca usar el candado de otra persona ni retirar una tarjeta que no fue colocada por uno mismo."}, {"h": "Referencia", "p": ["Este documento complementa la Sección 2 del Manual Técnico MT65S — Procedimientos de bloqueo (LOTO)."]}]}, "instr_frenos": {"titulo": "Verificación Sistema de Frenos", "subtitulo": "Camión Minero MT65S", "meta": "IT-FRE-001 · Frecuencia: cada 250 h", "sections": [{"h": "Alcance", "p": ["Instructivo de verificación en terreno para el Camión Minero MT65S (TS-CAEX-0000125). Frecuencia: cada 250 h."]}, {"h": "Pasos de verificación", "table": [["N°", "Paso de verificación", "Referencia"], ["1", "Aplicar procedimiento LOTO antes de iniciar la verificación.", "—"], ["2", "Medir espesor de pastilla en las 4 ruedas con pie de metro.", "Mínimo: 8 mm"], ["3", "Verificar torque de pernos de caliper con llave torquímetra calibrada.", "180-210 Nm"], ["4", "Inspeccionar disco: buscar rayado profundo, alabeo o grietas superficiales.", "—"], ["5", "Verificar nivel de fluido del circuito de frenos y buscar fugas en líneas.", "—"], ["6", "En frenos SAHR: verificar presión de precarga del acumulador.", "Según ficha del acumulador"], ["7", "Prueba funcional: aplicar freno y verificar que no haya pedal esponjoso.", "—"]]}, {"h": "Precauciones", "list": ["No omitir. Requisito de seguridad obligatorio.", "Si el pedal está esponjoso, hay aire en el circuito — no operar."], "note": "Estas precauciones son de cumplimiento obligatorio durante la ejecución del instructivo."}, {"h": "Registro", "p": ["Al finalizar la verificación, registrar el resultado en el Informe de Mantenimiento indicando que se utilizó este instructivo, junto con cualquier alcance técnico observado."]}]}, "instr_hidraulico": {"titulo": "Verificación Sistema Hidráulico", "subtitulo": "Camión Minero MT65S", "meta": "IT-HID-001 · Frecuencia: cada 250 h", "sections": [{"h": "Alcance", "p": ["Instructivo de verificación en terreno para el Camión Minero MT65S (TS-CAEX-0000125). Frecuencia: cada 250 h."]}, {"h": "Pasos de verificación", "table": [["N°", "Paso de verificación", "Referencia"], ["1", "Posicionar la tolva completamente abajo y apagar el motor.", "—"], ["2", "Verificar nivel de aceite hidráulico en la mirilla del estanque.", "Capacidad 180 L · ISO VG 46"], ["3", "Inspeccionar mangueras de alta presión: abrasión, grietas y fugas.", "SAE 100R2 · revisión visual diaria"], ["4", "Verificar apriete y estado de o-rings en las conexiones principales.", "—"], ["5", "Con el equipo operativo, medir presión de trabajo del sistema.", "Normal: 180-195 bar · Máx: 210 bar"], ["6", "Verificar estado del filtro de retorno y su indicador de restricción.", "Elemento 10 micrones · cambio cada 500 h"], ["7", "Operar la tolva un ciclo completo y verificar recorrido sin trabas ni ruidos.", "—"]]}, {"h": "Precauciones", "list": ["Esperar a que el sistema pierda presión residual."], "note": "Estas precauciones son de cumplimiento obligatorio durante la ejecución del instructivo."}, {"h": "Registro", "p": ["Al finalizar la verificación, registrar el resultado en el Informe de Mantenimiento indicando que se utilizó este instructivo, junto con cualquier alcance técnico observado."]}]}, "instr_neumaticos": {"titulo": "Verificación Presión de Neumáticos", "subtitulo": "Camión Minero MT65S", "meta": "IT-NEU-001 · Frecuencia: diaria (pre-uso)", "sections": [{"h": "Alcance", "p": ["Instructivo de verificación en terreno para el Camión Minero MT65S (TS-CAEX-0000125). Frecuencia: diaria (pre-uso)."]}, {"h": "Pasos de verificación", "table": [["N°", "Paso de verificación", "Referencia"], ["1", "Realizar la medición con los neumáticos fríos, antes de operar.", "—"], ["2", "Medir presión en los 6 neumáticos con manómetro calibrado.", "En carga: 620-650 kPa"], ["3", "Registrar cada valor individualmente, no solo el promedio.", "—"], ["4", "Inspeccionar desgaste de banda de rodadura en cada neumático.", "—"], ["5", "Buscar cortes, penetraciones o separación de capas en el flanco.", "—"], ["6", "Verificar torque de pernos de rueda.", "650-700 Nm"], ["7", "Reportar cualquier neumático fuera de rango en el Informe.", "—"]]}, {"h": "Precauciones", "list": ["Medir en caliente da lecturas falsamente altas.", "Desgaste irregular puede indicar problema de alineación o suspensión.", "RP-0789 figura sin stock — reportar con severidad alta si es crítico."], "note": "Estas precauciones son de cumplimiento obligatorio durante la ejecución del instructivo."}, {"h": "Registro", "p": ["Al finalizar la verificación, registrar el resultado en el Informe de Mantenimiento indicando que se utilizó este instructivo, junto con cualquier alcance técnico observado."]}]}, "instr_tolva": {"titulo": "Verificación Estado de Tolva", "subtitulo": "Camión Minero MT65S", "meta": "IT-TOL-001 · Frecuencia: cada 500 h", "sections": [{"h": "Alcance", "p": ["Instructivo de verificación en terreno para el Camión Minero MT65S (TS-CAEX-0000125). Frecuencia: cada 500 h."]}, {"h": "Pasos de verificación", "table": [["N°", "Paso de verificación", "Referencia"], ["1", "Inspeccionar estructura de la tolva: grietas en soldaduras y refuerzos.", "—"], ["2", "Verificar desgaste del piso de la tolva y placas antidesgaste.", "—"], ["3", "Revisar pasadores y bujes del pivote de volteo: juego y lubricación.", "—"], ["4", "Inspeccionar cilindro telescópico de volteo: fuga en vástago y rayado.", "Carrera 1.850 mm"], ["5", "Verificar fijación y estado del sistema de amortiguación de descarga.", "—"], ["6", "Realizar un ciclo completo de subida y bajada, midiendo tiempo.", "—"], ["7", "Verificar que el seguro mecánico de tolva levantada opere correctamente.", "—"]]}, {"h": "Precauciones", "list": ["Toda grieta estructural debe reportarse de inmediato.", "Si la tolva sube lenta, revisar filtro de succión antes de sospechar de la bomba.", "Crítico: nunca trabajar bajo tolva sin el seguro puesto."], "note": "Estas precauciones son de cumplimiento obligatorio durante la ejecución del instructivo."}, {"h": "Registro", "p": ["Al finalizar la verificación, registrar el resultado en el Informe de Mantenimiento indicando que se utilizó este instructivo, junto con cualquier alcance técnico observado."]}]}, "instr_motor": {"titulo": "Verificación Motor y Refrigeración", "subtitulo": "Camión Minero MT65S", "meta": "IT-MOT-001 · Frecuencia: cada 250 h", "sections": [{"h": "Alcance", "p": ["Instructivo de verificación en terreno para el Camión Minero MT65S (TS-CAEX-0000125). Frecuencia: cada 250 h."]}, {"h": "Pasos de verificación", "table": [["N°", "Paso de verificación", "Referencia"], ["1", "Verificar nivel de refrigerante con el motor completamente frío.", "—"], ["2", "Inspeccionar el radiador: obstrucción por polvo o material particulado.", "—"], ["3", "Verificar tensión y estado de la correa del ventilador.", "—"], ["4", "Revisar nivel de aceite de motor y buscar fugas visibles.", "Cambio cada 500 h"], ["5", "Verificar estado del filtro de aire e indicador de restricción.", "RP-0198 · cada 500 h o según indicador"], ["6", "Encender el motor y verificar temperatura de operación estabilizada.", "Normal: hasta 100 °C · Alerta: sobre 105 °C"], ["7", "Revisar el panel: registrar cualquier código de falla activo.", "E-02 / E-04 / E-07 · ver manual sección 10"]]}, {"h": "Precauciones", "list": ["Nunca abrir la tapa del radiador con el motor caliente.", "Condición frecuente en operaciones de rajo — limpiar si corresponde."], "note": "Estas precauciones son de cumplimiento obligatorio durante la ejecución del instructivo."}, {"h": "Registro", "p": ["Al finalizar la verificación, registrar el resultado en el Informe de Mantenimiento indicando que se utilizó este instructivo, junto con cualquier alcance técnico observado."]}]}};
+const TYPE_LABEL = { operacion: 'Operación', servicio: 'Servicio', reparacion: 'Reparación', partes: 'Partes' };
 
-const PLANO_IMG_URL = "assets/img/plano-hidraulico.png";
+async function cargarDocumentos(){
+  const cont = document.getElementById('documentos-list');
+  if (!cont || !activoActualId) return;
 
-function renderDocSection(sec){
-  let html = '';
-  if (sec.h) html += `<div class="doc-h">${escapeHtml(sec.h)}</div>`;
-  if (sec.p) sec.p.forEach(par => { html += `<p class="doc-p">${escapeHtml(par)}</p>`; });
-  if (sec.list) {
-    html += '<ul class="doc-list">';
-    sec.list.forEach(li => { html += `<li>${escapeHtml(li)}</li>`; });
-    html += '</ul>';
+  if (!navigator.onLine) {
+    cont.innerHTML = '<p class="historial-status">Sin conexión — los documentos no están disponibles offline todavía.</p>';
+    return;
   }
-  if (sec.table) {
-    html += '<table class="doc-table"><thead><tr>';
-    sec.table[0].forEach(cell => { html += `<th>${escapeHtml(cell)}</th>`; });
-    html += '</tr></thead><tbody>';
-    sec.table.slice(1).forEach(row => {
-      html += '<tr>';
-      row.forEach(cell => { html += `<td>${escapeHtml(cell)}</td>`; });
-      html += '</tr>';
+
+  cont.innerHTML = '<p class="historial-status">Cargando documentos…</p>';
+
+  try {
+    const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/documents`);
+    if (!resp.ok) {
+      cont.innerHTML = '<p class="historial-status">No se pudo cargar los documentos.</p>';
+      return;
+    }
+    const docs = await resp.json();
+    if (!docs.length) {
+      cont.innerHTML = '<div class="comp-hist-empty" style="padding:4px 2px;">Todavía no hay documentos cargados para este activo.</div>';
+      return;
+    }
+
+    cont.innerHTML = docs.map((doc) => `
+      <div class="list-row" data-doc-id="${doc.id}" role="button" tabindex="0" aria-label="Abrir ${escapeHtml(doc.title)}">
+        <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12h6M9 16h6" stroke="#D07838" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="li-txt">
+          <strong>${escapeHtml(doc.title)}</strong>
+          <small>${TYPE_LABEL[doc.document_type] || doc.document_type}${doc.index_status !== 'indexed' ? ' · Indexando para el asistente…' : ''}</small>
+        </div>
+      </div>
+    `).join('');
+
+    cont.querySelectorAll('[data-doc-id]').forEach((row) => {
+      const doc = docs.find((d) => d.id === row.dataset.docId);
+      if (!doc) return;
+      const abrir = () => window.open(doc.url, '_blank');
+      row.addEventListener('click', abrir);
+      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
     });
-    html += '</tbody></table>';
-  }
-  if (sec.img) {
-    html += `<img class="doc-img" src="${PLANO_IMG_URL}" alt="Diagrama del sistema hidráulico">`;
-  }
-  if (sec.note) {
-    html += `<div class="doc-note"><b>Importante:</b> ${escapeHtml(sec.note)}</div>`;
-  }
-  return html;
-}
-
-// 'origen' decide a dónde vuelve el botón "Atrás" del lector (ver back-doc-reader
-// más abajo) — antes era un global (docReaderOrigen) que cada llamador mutaba
-// por su cuenta antes de invocar openDocReader; ahora es un parámetro explícito,
-// así que queda 100% privado a este módulo (default 'documentos' porque es el
-// origen más común: la lista de manuales).
-let docReaderOrigen = 'documentos';
-
-export function openDocReader(docKey, scrollToText, origen = 'documentos'){
-  const data = DOC_DATA[docKey];
-  if (!data) return;
-  docReaderOrigen = origen;
-
-  document.getElementById('doc-title').textContent = data.titulo;
-  document.getElementById('doc-subtitle').textContent = data.subtitulo;
-  document.getElementById('doc-meta').textContent = data.meta;
-
-  const body = document.getElementById('doc-body');
-  body.innerHTML = data.sections.map(renderDocSection).join('');
-
-  goTo('step-doc-reader');
-  const stage = document.querySelector('.doc-reader-stage');
-  stage.scrollTop = 0;
-
-  if (scrollToText) {
-    requestAnimationFrame(() => {
-      const heading = Array.from(body.querySelectorAll('.doc-h'))
-        .find(h => h.textContent.toLowerCase().includes(scrollToText.toLowerCase()));
-      if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+  } catch (err) {
+    cont.innerHTML = '<p class="historial-status">No se pudo conectar con el servidor.</p>';
   }
 }
 
-document.querySelectorAll('#step-documentos .list-row[data-doc]').forEach(row => {
-  row.addEventListener('click', () => openDocReader(row.dataset.doc));
-  row.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDocReader(row.dataset.doc); }
-  });
+document.getElementById('tile-documentos').addEventListener('click', () => {
+  goTo('step-documentos');
+  cargarDocumentos();
 });
-
-document.getElementById('back-doc-reader').addEventListener('click', async () => {
-  if (docReaderOrigen === 'instructivos') {
-    const { renderInstructivosList } = await import('./instructivos.js');
-    renderInstructivosList();
-    goTo('step-instructivos');
-  } else {
-    goTo('step-documentos');
-  }
-});
-
-// ---- Acordeón del Manual Técnico + Accesos Rápidos por tema ----
-const manualToggle = document.getElementById('manual-accordion-toggle');
-const manualPanel = document.getElementById('manual-accordion-panel');
-
-function toggleManualAccordion(){
-  const isOpen = manualPanel.classList.toggle('open');
-  manualToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-}
-manualToggle.addEventListener('click', toggleManualAccordion);
-manualToggle.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleManualAccordion(); }
-});
-
-document.querySelectorAll('.manual-qa-tile').forEach(tile => {
-  tile.addEventListener('click', () => {
-    if (tile.dataset.doc) openDocReader(tile.dataset.doc);
-  });
-});
-
-const TODOS_LOS_MANUALES = [
-  { key: 'manual', nombre: 'Manual Técnico MT65S', icon: 'M7 3h7l4 4v14H7z' },
-  { key: 'plano', nombre: 'Plano Hidráulico', icon: 'M7 3h7l4 4v14H7z' },
-  { key: 'plano_electrico', nombre: 'Plano Eléctrico', icon: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z' },
-  { key: 'plano_neumatico', nombre: 'Plano Neumático', icon: 'M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z' },
-  { key: 'aceites', nombre: 'Aceites', icon: 'M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z' },
-  { key: 'procedimientos', nombre: 'Procedimientos', icon: 'M6 4h12v16H6z' },
-  { key: 'manual_servicio', nombre: 'Manual de Servicio', icon: 'M14.7 6.3a4 4 0 0 0-5.4 4.7' },
-  { key: 'inspecciones', nombre: 'Inspecciones', icon: 'M4 4h16v16H4z' },
-  { key: 'manual_repuestos', nombre: 'Manual de Repuestos', icon: 'M21 8 12 3 3 8v8l9 5 9-5V8Z' },
-  { key: 'garantia', nombre: 'Certificado de Garantía', icon: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z' },
-  { key: 'ast', nombre: 'AST Cambio de Filtros', icon: 'M4 4h16v16H4z' },
-];
-
-const manualIndexList = document.getElementById('manual-index-list');
-manualIndexList.innerHTML = TODOS_LOS_MANUALES.map(m => `
-  <div class="list-row" data-doc="${m.key}" role="button" tabindex="0" aria-label="Abrir ${escapeHtml(m.nombre)}">
-    <div class="li-ic"><svg viewBox="0 0 24 24" fill="none"><path d="${m.icon}" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-    <div class="li-txt"><strong>${escapeHtml(m.nombre)}</strong></div>
-  </div>
-`).join('');
-manualIndexList.querySelectorAll('.list-row').forEach(row => {
-  row.addEventListener('click', () => openDocReader(row.dataset.doc));
-});
-
-const manualIndexPanel = document.getElementById('manual-index-panel');
-document.getElementById('manual-open-full').addEventListener('click', () => {
-  manualIndexPanel.classList.toggle('open');
-});
-
-document.getElementById('tile-documentos').addEventListener('click', () => goTo('step-documentos'));
 document.getElementById('back-documentos').addEventListener('click', () => goTo('step-confirm-3'));

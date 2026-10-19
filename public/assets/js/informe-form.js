@@ -420,7 +420,7 @@ btnPreviewInforme.addEventListener('click', () => {
 
   const data = {
     folio: obtenerFolioInforme(),
-    equipo: ACTIVOS[activoActualId] ? ACTIVOS[activoActualId].nombre : 'Camión Minero MT65S',
+    equipo: ACTIVOS[activoActualId] ? ACTIVOS[activoActualId].nombre : (activoActualId || 'Activo'),
     equipoId: activoActualId,
     tecnico: document.getElementById('informe-tecnico').textContent,
     fecha: document.getElementById('informe-fecha').textContent,

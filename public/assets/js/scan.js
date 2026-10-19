@@ -204,6 +204,7 @@ export function iniciarModoLectura(){
 function mapearActivoDesdeApi(data){
   const estadoLabel = { operativo: 'Operativo', mantenimiento: 'Mantención', fuera_de_servicio: 'Detenido' };
   return {
+    id: data.id,
     nombre: data.name,
     serie: data.serial_number || '—',
     anio: data.manufacture_year || '—',

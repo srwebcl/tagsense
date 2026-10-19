@@ -5,7 +5,6 @@
 // que normalmente solo maneja el área de confiabilidad / monitoreo de condiciones.
 
 import { goTo, escapeHtml } from './core.js';
-import { openDocReader } from './documentos.js';
 
 export const INSTRUCTIVOS = {
   frenos: {
@@ -80,7 +79,10 @@ export const INSTRUCTIVOS = {
   },
 };
 
-// La lista abre cada instructivo en el visor de documentos (solo lectura, sin descarga).
+// La lista abre cada instructivo en un visor de pasos propio (step-doc-reader,
+// compartido con nada más — ver abrirInstructivo). Antes delegaba en el lector
+// de documentos (documentos.js), que ahora solo muestra PDFs reales subidos
+// por el admin, sin forma de renderizar este tipo de checklist paso a paso.
 export function renderInstructivosList(){
   const cont = document.getElementById('instructivos-list');
   cont.innerHTML = Object.entries(INSTRUCTIVOS).map(([key, ins]) => `
@@ -95,10 +97,35 @@ export function renderInstructivosList(){
   `).join('');
 
   cont.querySelectorAll('.instructivo-card').forEach(card => {
-    const abrir = () => openDocReader('instr_' + card.dataset.instr, undefined, 'instructivos');
+    const abrir = () => abrirInstructivo(card.dataset.instr);
     card.addEventListener('click', abrir);
     card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
   });
+}
+
+function abrirInstructivo(key){
+  const ins = INSTRUCTIVOS[key];
+  if (!ins) return;
+
+  document.getElementById('doc-title').textContent = ins.nombre;
+  document.getElementById('doc-subtitle').textContent = 'Verificación en terreno';
+  document.getElementById('doc-meta').textContent = ins.meta;
+
+  const body = document.getElementById('doc-body');
+  body.innerHTML = ins.pasos.map((paso, i) => `
+    <div class="doc-p" style="display:flex; gap:10px; align-items:flex-start;">
+      <b style="flex-shrink:0;">${i + 1}.</b>
+      <span>
+        ${escapeHtml(paso.txt)}
+        ${paso.ref ? `<br><span style="color:var(--text-low); font-size:12.5px;">Referencia: ${escapeHtml(paso.ref)}</span>` : ''}
+        ${paso.alerta ? `<div class="doc-note" style="margin-top:6px;"><b>Importante:</b> ${escapeHtml(paso.alerta)}</div>` : ''}
+      </span>
+    </div>
+  `).join('');
+
+  goTo('step-doc-reader');
+  const stage = document.querySelector('.doc-reader-stage');
+  if (stage) stage.scrollTop = 0;
 }
 
 document.getElementById('tile-instructivos').addEventListener('click', () => {
@@ -106,3 +133,4 @@ document.getElementById('tile-instructivos').addEventListener('click', () => {
   goTo('step-instructivos');
 });
 document.getElementById('back-instructivos').addEventListener('click', () => goTo('step-confirm-3'));
+document.getElementById('back-doc-reader').addEventListener('click', () => goTo('step-instructivos'));

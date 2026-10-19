@@ -35,7 +35,7 @@ export function generarInformePdf(data){
   const KHAKI = COPPER;
   const KHAKI_PALE = IVORY_PALE;
 
-  const docNum = `TAGSENSE-MT65S-${data.folio}`;
+  const docNum = `TAGSENSE-${data.equipoId}-${data.folio}`;
   let y = 0;
   let seccionN = 0;
 

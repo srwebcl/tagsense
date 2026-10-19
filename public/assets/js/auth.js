@@ -10,6 +10,7 @@ import { hapticPulse, goTo, welcomeName } from './core.js';
 import { iniciarModoLectura, activoActualId } from './scan.js';
 import { cargarSolicitudes } from './solicitudes.js';
 import { abrirFormularioInforme } from './informe-form.js';
+import { initChat } from './asistente.js';
 
 export const emailInput = document.getElementById('email-input');
 export const passwordInput = document.getElementById('password-input');
@@ -101,6 +102,10 @@ accessBtn.addEventListener('click', async () => {
     } else if (pendingDestino === 'informe') {
       pendingDestino = null;
       abrirFormularioInforme();
+    } else if (pendingDestino === 'asistente') {
+      pendingDestino = null;
+      goTo('step-asistente');
+      initChat();
     } else {
       goTo('step-read');
       iniciarModoLectura();
