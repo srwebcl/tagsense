@@ -14,7 +14,7 @@ export function NewUserForm() {
     return (
       <div className="admin-panel">
         <p className="sub" style={{ marginBottom: 10 }}>
-          Usuario creado: <b>{estado.exito.email}</b>. Pásale esta contraseña por un canal seguro — no se vuelve a
+          Usuario creado: <b>{estado.exito.email}</b>. Pásale esta contraseña por un canal seguro. No se vuelve a
           mostrar:
         </p>
         <code style={{ display: "block", background: "var(--bg-1)", padding: "10px 12px", borderRadius: 8, fontSize: 14, marginBottom: 14, userSelect: "all" }}>
@@ -70,7 +70,7 @@ export function NewUserForm() {
         ) : null}
 
         <p className="sub" style={{ marginBottom: 14 }}>
-          La contraseña se genera automáticamente y se muestra una vez al crear el usuario — no se elige aquí.
+          La contraseña se genera automáticamente y se muestra una vez al crear el usuario. No se elige aquí.
         </p>
 
         <SubmitButton>Crear usuario</SubmitButton>

@@ -46,7 +46,7 @@ export default async function NewAssetPage() {
                 <input name="tag_code" required defaultValue={tagCodeSugerido} />
               </div>
               <small style={{ display: "block", marginTop: 6, color: "var(--text-mid)" }}>
-                Se sugiere en base al correlativo de activos existentes — edítalo si corresponde otro.
+                Sugerido según el correlativo de activos existentes. Puedes editarlo.
               </small>
             </div>
 
@@ -57,7 +57,7 @@ export default async function NewAssetPage() {
                 accept="image/*"
                 required={false}
                 label="Elegir foto del activo"
-                hint="Opcional — se usa en la ficha de la app de campo."
+                hint="Opcional. Se usa en la ficha de la app de campo."
               />
             </div>
 

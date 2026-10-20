@@ -141,9 +141,9 @@ export default async function AssetDetailPage({
           <div className="qr-panel-info">
             <p className="qr-panel-code">{asset.tag_code}</p>
             <p className="qr-panel-hint">
-              Se genera solo a partir del código del tag — imprímelo y pégalo en el equipo. Cualquier cámara lo
-              reconoce; si el celular no tiene la app, igual abre la ficha en el navegador. El mismo link de acá
-              abajo es el que hay que grabar en el chip NFC del tag físico, si el equipo tiene uno.
+              Se genera a partir del código del tag. Imprímelo y pégalo en el equipo; cualquier cámara lo reconoce, y
+              si el celular no tiene la app igual abre la ficha en el navegador. El link de abajo es el que hay que
+              grabar en el chip NFC del tag físico, si el equipo tiene uno.
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
@@ -160,8 +160,7 @@ export default async function AssetDetailPage({
         <p className="section-label">Ficha técnica</p>
         <div className="admin-panel" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <p className="sub" style={{ margin: 0, maxWidth: 480 }}>
-            La info técnica por sistema (Frenos, Dirección...) que usa el asistente de la app de campo — con o sin
-            manual PDF cargado.
+            Información técnica por sistema que usa el asistente de la app de campo, con o sin manual PDF cargado.
           </p>
           <Link href={`/admin/assets/${id}/ficha`} className="btn-outline">
             Editar ficha técnica

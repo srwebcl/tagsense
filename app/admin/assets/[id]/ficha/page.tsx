@@ -78,8 +78,8 @@ export default async function FichaTecnicaPage({
           <div>
             <h1>Ficha técnica</h1>
             <p className="sub">
-              {asset.name} · {asset.tag_code} — los componentes de este activo y su información técnica. El
-              Asistente de la app de campo usa esta información al diagnosticar, con o sin manual PDF cargado.
+              {asset.name} · {asset.tag_code}. Componentes de este activo e información técnica que usa el
+              Asistente de la app de campo al diagnosticar, con o sin manual PDF cargado.
             </p>
           </div>
           <Link href="/admin/categorias" className="btn-outline">

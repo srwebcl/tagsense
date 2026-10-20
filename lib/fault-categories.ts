@@ -41,6 +41,33 @@ export async function listarComponentesDeActivo(tenantId: string, assetId: strin
   return result.rows;
 }
 
+// Plantilla de sistemas que corresponde a un TIPO de activo (Camión Minero,
+// Pala Cargadora...) — distinto de listarComponentesDeActivo: esto es la
+// correlación general tipo -> sistemas, editable en /admin/categorias. Al
+// crear un activo de este tipo, su contenido se copia a asset_components
+// para ese activo en particular (ver crearActivo).
+export async function listarSlugsDeTipoDeActivo(tenantId: string, assetType: string): Promise<string[]> {
+  const result = await pool.query<{ category_slug: string }>(
+    `select category_slug from asset_type_components where tenant_id = $1 and asset_type = $2`,
+    [tenantId, assetType]
+  );
+  return result.rows.map((r) => r.category_slug);
+}
+
+// Todas las plantillas del tenant de una sola vez, agrupadas por tipo —
+// para pintar la pantalla de Categorías sin una consulta por tipo.
+export async function listarPlantillasPorTipo(tenantId: string): Promise<Record<string, string[]>> {
+  const result = await pool.query<{ asset_type: string; category_slug: string }>(
+    `select asset_type, category_slug from asset_type_components where tenant_id = $1`,
+    [tenantId]
+  );
+  const porTipo: Record<string, string[]> = {};
+  for (const fila of result.rows) {
+    (porTipo[fila.asset_type] ||= []).push(fila.category_slug);
+  }
+  return porTipo;
+}
+
 // El admin escribe el nombre ("Neumáticos") y se deriva un slug estable para
 // guardar/matchear (sin tildes, minúsculas, guiones) — mismo criterio simple
 // que ya usa el resto del proyecto para tag_code/ids legibles.

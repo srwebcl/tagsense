@@ -34,7 +34,7 @@ export function ResetPasswordButton({
     return (
       <div style={{ background: "var(--graphite)", border: "1px solid var(--graphite-line)", borderRadius: 10, padding: 12, marginTop: 6 }}>
         <p className="sub" style={{ margin: "0 0 6px" }}>
-          Nueva contraseña para <b>{userName}</b> — copiala ahora, no se vuelve a mostrar:
+          Nueva contraseña para <b>{userName}</b>. Cópiala ahora, no se vuelve a mostrar:
         </p>
         <code style={{ display: "block", background: "var(--bg-1)", padding: "8px 10px", borderRadius: 8, fontSize: 13, marginBottom: 8, userSelect: "all" }}>
           {password}

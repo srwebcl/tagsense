@@ -1,19 +1,21 @@
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { listarCategoriasFalla, listarTiposFicha } from "@/lib/fault-categories";
+import { listarCategoriasFalla, listarTiposFicha, listarPlantillasPorTipo } from "@/lib/fault-categories";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { NuevaCategoriaForm } from "@/app/admin/_components/NuevaCategoriaForm";
-import { crearCategoriaFalla, crearTipoFicha, crearTipoDeActivo } from "./actions";
+import { PlantillaPorTipo } from "@/app/admin/_components/PlantillaPorTipo";
+import { crearCategoriaFalla, crearTipoFicha, crearTipoDeActivo, alternarComponenteDeTipo } from "./actions";
 
 export default async function CategoriasPage() {
   const appUser = await requireAdmin();
 
-  const [sistemas, tipos, tiposActivoResult] = await Promise.all([
+  const [sistemas, tipos, tiposActivoResult, plantillas] = await Promise.all([
     listarCategoriasFalla(appUser.tenant_id),
     listarTiposFicha(appUser.tenant_id),
     pool.query<{ name: string }>(`select name from asset_types where tenant_id = $1 order by name`, [appUser.tenant_id]),
+    listarPlantillasPorTipo(appUser.tenant_id),
   ]);
-  const tiposActivo = tiposActivoResult.rows;
+  const tiposActivo = tiposActivoResult.rows.map((r) => r.name);
 
   return (
     <>
@@ -26,14 +28,23 @@ export default async function CategoriasPage() {
           </div>
         </div>
 
+        <p className="section-label" style={{ marginBottom: 6 }}>Sistemas por tipo de activo</p>
+        <p className="sub" style={{ marginBottom: 16 }}>
+          Define qué sistemas trae un activo nuevo según su tipo. Los activos existentes no cambian; se editan desde
+          su propia ficha técnica.
+        </p>
+        <div className="admin-panel" style={{ marginBottom: 24 }}>
+          <PlantillaPorTipo tiposActivo={tiposActivo} sistemas={sistemas} plantillas={plantillas} action={alternarComponenteDeTipo} />
+        </div>
+
         <div className="categorias-grid">
           <div className="admin-panel">
             <p className="section-label" style={{ marginBottom: 6 }}>Tipos de activo</p>
             <p className="sub" style={{ marginBottom: 16 }}>Clasificación de equipos disponible al crear o editar un activo.</p>
             <div className="chip-list" style={{ marginBottom: 18 }}>
               {tiposActivo.map((t) => (
-                <span key={t.name} className="badge">
-                  {t.name}
+                <span key={t} className="badge">
+                  {t}
                 </span>
               ))}
             </div>

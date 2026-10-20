@@ -91,6 +91,14 @@
 .categorias-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
 .chip-list{ display:flex; flex-wrap:wrap; gap:8px; }
 
+.plantilla-checklist{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+.plantilla-check-item{
+  display:flex; align-items:center; gap:10px; padding:10px 12px;
+  background:var(--graphite); border:1px solid var(--graphite-line); border-radius:10px;
+  font-size:13px; font-weight:600; color:var(--text-hi); cursor:pointer;
+}
+.plantilla-check-item input{ width:16px; height:16px; accent-color:var(--copper-2); cursor:pointer; }
+
 .ficha-layout{ display:flex; gap:24px; align-items:flex-start; }
 .ficha-sidebar{
   display:flex; flex-direction:column; gap:2px; flex-shrink:0; width:220px;

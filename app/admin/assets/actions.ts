@@ -9,7 +9,7 @@ import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
 import { indexDocument, indexSimulatedText } from "@/lib/indexing";
 import { detectImageKind, isPdf } from "@/lib/file-validation";
-import { listarTiposFicha, slugificar } from "@/lib/fault-categories";
+import { listarTiposFicha, listarSlugsDeTipoDeActivo, slugificar } from "@/lib/fault-categories";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
   const n = parseInt(String(raw || "").trim(), 10);
@@ -96,6 +96,19 @@ export async function crearActivo(formData: FormData) {
   }
   const assetId = result.rows[0].id;
   await registrarTipoDeActivo(appUser.tenant_id, assetType);
+
+  // Si el tipo elegido tiene una plantilla de sistemas definida (ver
+  // /admin/categorias), el activo nuevo arranca con esos componentes ya
+  // activos — no desde cero. Editable después igual desde su ficha técnica.
+  if (assetType) {
+    const slugsPlantilla = await listarSlugsDeTipoDeActivo(appUser.tenant_id, assetType);
+    for (const slug of slugsPlantilla) {
+      await pool.query(
+        `insert into asset_components (tenant_id, asset_id, category_slug) values ($1, $2, $3) on conflict (asset_id, category_slug) do nothing`,
+        [appUser.tenant_id, assetId, slug]
+      );
+    }
+  }
 
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {

@@ -48,8 +48,8 @@ export default async function EditAssetPage({
           <div>
             <h1>Editar activo</h1>
             <p className="sub">
-              Código del tag: <b>{asset.tag_code}</b> — no se puede cambiar acá porque ya está impreso/grabado en el
-              QR o NFC pegado al equipo.
+              Código del tag: <b>{asset.tag_code}</b>. No se puede cambiar acá: ya está impreso o grabado en el QR o
+              NFC pegado al equipo.
             </p>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default async function EditAssetPage({
                 accept="image/*"
                 required={false}
                 label="Elegir foto del activo"
-                hint={photoUrl ? "Deja vacío para mantener la foto actual." : "Opcional — se usa en la ficha de la app de campo."}
+                hint={photoUrl ? "Deja vacío para mantener la foto actual." : "Opcional. Se usa en la ficha de la app de campo."}
               />
             </div>
 

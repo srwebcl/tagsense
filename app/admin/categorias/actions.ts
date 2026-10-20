@@ -72,3 +72,27 @@ export async function crearTipoDeActivo(formData: FormData) {
   revalidatePath("/admin/categorias");
   redirect("/admin/categorias");
 }
+
+// Marca o desmarca un sistema en la plantilla de un tipo de activo — esta es
+// la correlación que define qué sistemas trae un activo nuevo de este tipo
+// al crearlo (ver crearActivo en app/admin/assets/actions.ts). No toca los
+// activos que ya existen, solo la plantilla para los que se creen de ahora
+// en adelante.
+export async function alternarComponenteDeTipo(assetType: string, categorySlug: string, activar: boolean) {
+  const appUser = await requireAdmin();
+
+  if (activar) {
+    await pool.query(
+      `insert into asset_type_components (tenant_id, asset_type, category_slug) values ($1, $2, $3)
+       on conflict (tenant_id, asset_type, category_slug) do nothing`,
+      [appUser.tenant_id, assetType, categorySlug]
+    );
+  } else {
+    await pool.query(
+      `delete from asset_type_components where tenant_id = $1 and asset_type = $2 and category_slug = $3`,
+      [appUser.tenant_id, assetType, categorySlug]
+    );
+  }
+
+  revalidatePath("/admin/categorias");
+}
