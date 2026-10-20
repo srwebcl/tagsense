@@ -1,36 +1,28 @@
 'use strict';
 
-// ================= COMPONENTES CRÍTICOS (ficha de vida por pieza) =================
-// Se auto-completan con lo que el técnico registra en cada Informe de Mantenimiento —
-// no se editan a mano en esta pantalla.
-//
-// Cacheado por activo (no hay tabla `components` en el backend todavía — ver
-// auditoría pre-lanzamiento — así que esto sigue siendo solo caché de sesión,
-// se pierde al recargar la página). Antes era un único objeto global: escanear
-// un segundo activo real mostraba el historial de reparaciones del primero
-// como si fuera del segundo. Cada activo ahora arranca con su propia ficha en
-// blanco (sin historial ni fecha de instalación inventada).
+// ================= COMPONENTES DEL ACTIVO (Sistemas + ficha de vida) =================
+// "Componente" acá es lo mismo que "Sistema" en el admin (Frenos, Dirección,
+// Tolva...) — el catálogo activo de este activo puntual (asset_components, ver
+// /admin/assets/:id/ficha y /admin/categorias). Antes esta pantalla tenía una
+// lista fija de 5 piezas (motor/transmision/hidraulico/frenos/mandos) igual
+// para cualquier activo; ahora muestra los Sistemas reales de ESTE activo, con
+// sus especificaciones y fallas conocidas (Equipamiento/Fallas principales de
+// la ficha técnica) más el historial de intervenciones que ya se registraba.
 
 import { escapeHtml, goTo, ultimoHorometro } from './core.js';
 import { activoActualId } from './scan.js';
 import { solicitudesCache } from './solicitudes.js';
-
-// Metadata estática (nombre/ícono no cambian según el activo) — separada del
-// estado mutable (estado/empresa/historial), que sí es por activo.
-export const COMPONENTE_META = {
-  motor: { nombre: 'Motor', icono: 'motor' },
-  transmision: { nombre: 'Transmisión', icono: 'transmision' },
-  hidraulico: { nombre: 'Sistema Hidráulico', icono: 'hidraulico' },
-  frenos: { nombre: 'Frenos', icono: 'frenos' },
-  mandos: { nombre: 'Mandos Finales', icono: 'mandos' },
-};
+import { cargarSistemasActivo, obtenerSistemasActivo, iconoSistema } from './sistemas-activo.js';
 
 const COMPONENTES_POR_ACTIVO = {};
 
 function crearComponentesIniciales(){
   const estado = {};
-  for (const key of Object.keys(COMPONENTE_META)) {
-    estado[key] = { estado: 'original', empresa: null, fechaInstalacion: null, horometroInstalacion: 0, historial: [] };
+  for (const sistema of obtenerSistemasActivo()) {
+    estado[sistema.slug] = {
+      estado: 'original', empresa: null, fechaInstalacion: null, horometroInstalacion: 0,
+      historial: [], especificaciones: null, fallas: null,
+    };
   }
   return estado;
 }
@@ -46,11 +38,10 @@ export function parseHorometro(str){
   return isNaN(n) ? null : n;
 }
 
-// Trae la ficha de vida real desde el backend (GET /api/assets/:id/components —
-// se reconstruye a partir del historial de intervenciones, no hay tabla aparte,
-// ver esa ruta). Antes esto vivía solo en memoria del navegador y se perdía al
-// recargar la página; ahora cada apertura de esta pantalla trae lo que de verdad
-// quedó guardado, incluidos los informes que se sincronizaron desde la cola offline.
+// Trae la ficha de vida real desde el backend: historial de intervenciones
+// (GET /api/assets/:id/components, reconstruido desde interventions — no hay
+// tabla aparte) y especificaciones/fallas de la ficha técnica
+// (GET /api/assets/:id/documents, Equipamiento/Fallas principales por Sistema).
 export async function cargarComponentes(){
   const container = document.getElementById('comp-criticos-list');
   if (!container || !activoActualId) return;
@@ -61,49 +52,58 @@ export async function cargarComponentes(){
     return;
   }
 
+  await cargarSistemasActivo();
+  const estado = crearComponentesIniciales();
+
   try {
-    const resp = await fetch(`/api/assets/${encodeURIComponent(activoActualId)}/components`);
-    if (!resp.ok) { renderComponentes(); return; } // se queda con lo que ya había en caché/default
+    const [respHist, respDocs] = await Promise.all([
+      fetch(`/api/assets/${encodeURIComponent(activoActualId)}/components`),
+      fetch(`/api/assets/${encodeURIComponent(activoActualId)}/documents`),
+    ]);
 
-    const filas = await resp.json();
-    const estado = crearComponentesIniciales();
-    for (const fila of filas) {
-      const c = estado[fila.componente];
-      if (!c) continue; // componente desconocido — no debería pasar, pero no revienta la pantalla
-      const horometroNum = parseHorometro(fila.horometro);
-      c.historial.push({
-        fecha: fila.started_at ? new Date(fila.started_at).toLocaleDateString('es-CL') : '—',
-        horometro: horometroNum !== null ? horometroNum : '—',
-        folio: fila.folio || '—',
-        detalle: fila.detalle || 'Intervención registrada.',
-        empresa: fila.empresa,
-        tecnico: fila.tecnico,
-      });
+    if (respHist.ok) {
+      const filas = await respHist.json();
+      for (const fila of filas) {
+        const c = estado[fila.componente];
+        if (!c) continue; // intervención de un sistema que ya no está activo en este activo
+        const horometroNum = parseHorometro(fila.horometro);
+        c.historial.push({
+          fecha: fila.started_at ? new Date(fila.started_at).toLocaleDateString('es-CL') : '—',
+          horometro: horometroNum !== null ? horometroNum : '—',
+          folio: fila.folio || '—',
+          detalle: fila.detalle || 'Intervención registrada.',
+          empresa: fila.empresa,
+          tecnico: fila.tecnico,
+        });
+      }
+      // El backend ya ordena por fecha descendente — la primera entrada de cada
+      // sistema es la intervención más reciente, la que define su estado "actual".
+      for (const c of Object.values(estado)) {
+        if (!c.historial.length) continue;
+        const ultima = c.historial[0];
+        c.estado = 'reparado';
+        c.empresa = ultima.empresa || 'Taller interno';
+        c.fechaInstalacion = ultima.fecha !== '—' ? ultima.fecha : null;
+        if (typeof ultima.horometro === 'number') c.horometroInstalacion = ultima.horometro;
+      }
     }
-    // El backend ya ordena por fecha descendente — la primera entrada de cada
-    // componente es la intervención más reciente, la que define su estado "actual".
-    for (const c of Object.values(estado)) {
-      if (!c.historial.length) continue;
-      const ultima = c.historial[0];
-      c.estado = 'reparado';
-      c.empresa = ultima.empresa || 'Taller interno';
-      c.fechaInstalacion = ultima.fecha !== '—' ? ultima.fecha : null;
-      if (typeof ultima.horometro === 'number') c.horometroInstalacion = ultima.horometro;
+
+    if (respDocs.ok) {
+      const docs = await respDocs.json();
+      for (const doc of docs) {
+        const c = estado[doc.category_slug];
+        if (!c || !doc.raw_text) continue;
+        if (doc.field_type_slug === 'equipamiento' && !c.especificaciones) c.especificaciones = doc.raw_text;
+        if (doc.field_type_slug === 'fallas' && !c.fallas) c.fallas = doc.raw_text;
+      }
     }
-    COMPONENTES_POR_ACTIVO[activoActualId] = estado;
-    renderComponentes();
   } catch (err) {
-    renderComponentes(); // sin conexión real (fetch tiró): se queda con lo que había
+    // sin conexión real: se queda con el estado en blanco recién creado
   }
-}
 
-const COMP_ICONS = {
-  motor: '<path d="M4 13h3l2-4h6l2 4h3v6H4v-6Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/><circle cx="15" cy="16" r="1.6" stroke="#D07838" stroke-width="1.4"/>',
-  transmision: '<circle cx="12" cy="12" r="3" stroke="#D07838" stroke-width="1.6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="#D07838" stroke-width="1.4" stroke-linecap="round"/>',
-  hidraulico: '<path d="M12 3s7 7.5 7 12a7 7 0 1 1-14 0c0-4.5 7-12 7-12Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/>',
-  frenos: '<circle cx="12" cy="12" r="8" stroke="#D07838" stroke-width="1.7"/><circle cx="12" cy="12" r="3" fill="#D07838"/>',
-  mandos: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 8l9 5 9-5M12 13v8" stroke="#D07838" stroke-width="1.6" stroke-linejoin="round"/>',
-};
+  COMPONENTES_POR_ACTIVO[activoActualId] = estado;
+  renderComponentes();
+}
 
 const ESTADO_LABELS = { original: 'Original', reparado: 'Reparado', reacondicionado: 'Reacondicionado', reemplazado: 'Reemplazado' };
 
@@ -111,11 +111,18 @@ export function renderComponentes(){
   const container = document.getElementById('comp-criticos-list');
   if (!container) return;
   if (!activoActualId) { container.innerHTML = ''; return; }
+  const sistemas = obtenerSistemasActivo();
+  if (!sistemas.length) {
+    container.innerHTML = '<div class="comp-hist-empty">Este activo todavía no tiene sistemas asignados en el admin.</div>';
+    return;
+  }
   const horometroActual = parseHorometro(ultimoHorometro[activoActualId]) || 0;
   const UMBRAL_ALERTA_HORAS = 4000; // referencia: sobre esto, sugerir revisión preventiva
+  const estadoActivo = getComponentesActivo(activoActualId);
 
-  container.innerHTML = Object.entries(getComponentesActivo(activoActualId)).map(([key, c]) => {
-    const meta = COMPONENTE_META[key];
+  container.innerHTML = sistemas.map((sistema) => {
+    const key = sistema.slug;
+    const c = estadoActivo[key] || { estado: 'original', historial: [], horometroInstalacion: 0, especificaciones: null, fallas: null };
     const fechaTexto = c.fechaInstalacion ? escapeHtml(c.fechaInstalacion) : 'fecha no registrada';
     const horas = Math.max(0, Math.round(horometroActual - c.horometroInstalacion));
     const enAlerta = horas >= UMBRAL_ALERTA_HORAS;
@@ -132,9 +139,9 @@ export function renderComponentes(){
     return `
       <div class="comp-card" id="comp-card-${key}">
         <div class="comp-card-head" data-toggle="${key}" role="button" tabindex="0">
-          <div class="comp-ic"><svg viewBox="0 0 24 24" fill="none">${COMP_ICONS[meta.icono]}</svg></div>
+          <div class="comp-ic"><svg viewBox="0 0 24 24" fill="none">${iconoSistema(key)}</svg></div>
           <div class="comp-head-txt">
-            <strong>${escapeHtml(meta.nombre)}</strong>
+            <strong>${escapeHtml(sistema.name)}</strong>
             <div class="comp-head-horas ${enAlerta ? 'alerta' : ''}">
               ${enAlerta ? '<svg viewBox="0 0 24 24" fill="none" class="alerta-ic"><path d="M12 2 2 20h20L12 2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' : ''}
               <b>${horas.toLocaleString('es-CL')}</b> horas acumuladas
@@ -151,6 +158,10 @@ export function renderComponentes(){
             <div><span class="dk">Fecha instalación</span><span class="dv">${fechaTexto}</span></div>
             <div><span class="dk">Horómetro instalación</span><span class="dv">${c.horometroInstalacion.toLocaleString('es-CL')} h</span></div>
           </div>
+          <div class="comp-hist-label">Especificaciones</div>
+          <div class="comp-hist-item">${c.especificaciones ? escapeHtml(c.especificaciones) : '<span class="comp-hist-empty-inline">Sin especificaciones registradas en la ficha técnica.</span>'}</div>
+          <div class="comp-hist-label">Fallas conocidas</div>
+          <div class="comp-hist-item">${c.fallas ? escapeHtml(c.fallas) : '<span class="comp-hist-empty-inline">Sin fallas registradas en la ficha técnica.</span>'}</div>
           <div class="comp-hist-label">Historial de intervenciones</div>
           ${historialHtml}
         </div>
@@ -168,9 +179,10 @@ export function renderComponentes(){
   });
 }
 
-// Actualiza la ficha de vida del componente cuando se genera un informe que lo interviene
-export function actualizarComponenteDesdeInforme(compKey, data, empresaTexto){
-  const c = getComponentesActivo(activoActualId)[compKey];
+// Actualiza la ficha de vida del sistema cuando se genera un informe que lo interviene
+export function actualizarComponenteDesdeInforme(sistemaSlug, data, empresaTexto){
+  const estadoActivo = getComponentesActivo(activoActualId);
+  const c = estadoActivo[sistemaSlug];
   if (!c) return;
   const horometroNum = parseHorometro(data.horometro);
   c.estado = 'reparado';

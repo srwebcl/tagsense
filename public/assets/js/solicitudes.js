@@ -10,7 +10,7 @@
 
 import { escapeHtml, mostrarToast, goTo } from './core.js';
 import { activoActualId } from './scan.js';
-import { COMPONENTE_META } from './componentes.js';
+import { nombreSistema } from './sistemas-activo.js';
 
 let smFolioCounter = 1;
 // Lo incrementa btnPreviewInforme (informe-form.js) al crear una SM optimista —
@@ -41,7 +41,7 @@ function renderSMList(){
         </div>
         <span class="sm-prioridad ${PRIORIDAD_CLASE[sm.prioridad] || ''}">${escapeHtml(sm.prioridad)}</span>
       </div>
-      <div class="sm-tipo"><b>${escapeHtml(sm.tipo)}</b>${sm.componente && COMPONENTE_META[sm.componente] ? ' · ' + escapeHtml(COMPONENTE_META[sm.componente].nombre) : ''}</div>
+      <div class="sm-tipo"><b>${escapeHtml(sm.tipo)}</b>${sm.componente ? ' · ' + escapeHtml(nombreSistema(sm.componente)) : ''}</div>
       <div class="sm-desc">${escapeHtml(sm.descripcion || 'Sin detalle adicional.')}</div>
       <div class="sm-card-bottom">
         <span class="sm-estado ${sm.estado === 'Resuelta' ? 'resuelta' : ''}">${escapeHtml(sm.estado)}</span>

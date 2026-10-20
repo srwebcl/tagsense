@@ -28,7 +28,10 @@ async function cargarDocumentos(){
       cont.innerHTML = '<p class="historial-status">No se pudo cargar los documentos.</p>';
       return;
     }
-    const docs = await resp.json();
+    // Esta pantalla es solo para archivos reales subidos por el admin — el
+    // contenido de la ficha técnica (Equipamiento/Fallas/Procedimientos, sin
+    // archivo propio) se muestra en Componentes e Instructivos, no acá.
+    const docs = (await resp.json()).filter((d) => d.source_type === 'upload' && d.url);
     if (!docs.length) {
       cont.innerHTML = '<div class="comp-hist-empty" style="padding:4px 2px;">Todavía no hay documentos cargados para este activo.</div>';
       return;

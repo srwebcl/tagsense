@@ -4,8 +4,6 @@
 // jsPDF se carga como script clásico (vendor/jspdf.umd.min.js) antes de este
 // módulo — ver public/index.html — y queda disponible como global window.jspdf.
 
-import { COMPONENTE_META } from './componentes.js';
-
 export function calcularDuracion(hi, ht){
   if (!hi || !ht) return '—';
   const [h1,m1] = hi.split(':').map(Number);
@@ -233,10 +231,10 @@ export function generarInformePdf(data){
   }
 
   // ---------- 4. COMPONENTE INTERVENIDO ----------
-  if (data.componente && COMPONENTE_META[data.componente]) {
+  if (data.componente && data.componenteNombre) {
     checkPageBreak(40);
     seccion('Componente intervenido');
-    parrafo(`${COMPONENTE_META[data.componente].nombre} · Empresa: ${data.empresa || 'Taller interno'}`);
+    parrafo(`${data.componenteNombre} · Empresa: ${data.empresa || 'Taller interno'}`);
   }
 
   // ---------- 5. VERIFICACIÓN EN TERRENO ----------
@@ -272,7 +270,7 @@ export function generarInformePdf(data){
   if (data.smAplica) {
     checkPageBreak(55);
     seccion('Solicitud de mantenimiento generada');
-    const compNombre = data.smComponente && COMPONENTE_META[data.smComponente] ? COMPONENTE_META[data.smComponente].nombre : '—';
+    const compNombre = data.smComponenteNombre || '—';
     const PR_COLOR = { 'Baja': GREEN, 'Media': ORANGE, 'Alta': RED, 'Urgente': RED };
     const prColor = PR_COLOR[data.smPrioridad] || KHAKI;
 

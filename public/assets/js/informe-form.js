@@ -4,10 +4,10 @@
 
 import { goTo, escapeHtml, welcomeName, ultimoHorometro } from './core.js';
 import { ACTIVOS, activoActualId } from './scan.js';
-import { COMPONENTE_META, actualizarComponenteDesdeInforme } from './componentes.js';
+import { actualizarComponenteDesdeInforme } from './componentes.js';
 import { generarFolioSM, agregarSolicitudOptimista } from './solicitudes.js';
-import { INSTRUCTIVOS } from './instructivos.js';
 import { informeState } from './informe-state.js';
+import { cargarSistemasActivo, obtenerSistemasActivo, nombreSistema } from './sistemas-activo.js';
 
 let informeFolioCounter = 1;
 // Expuesto para informe-sync.js: el folio se usa al construir la vista previa
@@ -79,30 +79,36 @@ Object.entries(severityChips).forEach(([nivel, chip]) => {
 });
 
 // ---- ¿Utilizó instructivos de verificación? ----
+// Las opciones son los Sistemas del activo (se verificó Frenos, Dirección...),
+// no una lista fija — se repintan cada vez que se abre el formulario (ver
+// renderChipsDeSistema), porque cambian según qué activo esté abierto.
 let instructivosUsados = false;
 const instructivosSeleccionados = new Set();
 const instrUsadosSi = document.getElementById('instr-usados-si');
 const instrUsadosNo = document.getElementById('instr-usados-no');
 const instrUsadosRow = document.getElementById('instr-usados-row');
 
-instrUsadosRow.innerHTML = Object.entries(INSTRUCTIVOS).map(([key, ins]) =>
-  `<div class="comp-chip" data-instr-sel="${key}" role="button" tabindex="0">${escapeHtml(ins.nombre.replace('Verificación ', ''))}</div>`
-).join('');
+function renderInstrUsadosRow(){
+  instructivosSeleccionados.clear();
+  instrUsadosRow.innerHTML = obtenerSistemasActivo().map((sistema) =>
+    `<div class="comp-chip" data-instr-sel="${sistema.slug}" role="button" tabindex="0">${escapeHtml(sistema.name)}</div>`
+  ).join('');
 
-instrUsadosRow.querySelectorAll('.comp-chip').forEach(chip => {
-  const toggle = () => {
-    const k = chip.dataset.instrSel;
-    if (instructivosSeleccionados.has(k)) {
-      instructivosSeleccionados.delete(k);
-      chip.classList.remove('selected');
-    } else {
-      instructivosSeleccionados.add(k);
-      chip.classList.add('selected');
-    }
-  };
-  chip.addEventListener('click', toggle);
-  chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-});
+  instrUsadosRow.querySelectorAll('.comp-chip').forEach(chip => {
+    const toggle = () => {
+      const k = chip.dataset.instrSel;
+      if (instructivosSeleccionados.has(k)) {
+        instructivosSeleccionados.delete(k);
+        chip.classList.remove('selected');
+      } else {
+        instructivosSeleccionados.add(k);
+        chip.classList.add('selected');
+      }
+    };
+    chip.addEventListener('click', toggle);
+    chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
+}
 
 function setInstructivosUsados(valor){
   instructivosUsados = valor;
@@ -147,31 +153,59 @@ function wireSingleSelectChips(rowId, dataAttr, onSet){
 }
 wireSingleSelectChips('sm-tipo-row', 'smTipo', v => smTipo = v);
 wireSingleSelectChips('sm-prioridad-row', 'smPrioridad', v => smPrioridad = v);
-wireSingleSelectChips('sm-componente-row', 'smComp', v => smComponente = v);
+
+function renderSmComponenteRow(){
+  const row = document.getElementById('sm-componente-row');
+  row.innerHTML = obtenerSistemasActivo().map((sistema) =>
+    `<div class="comp-chip" data-sm-comp="${sistema.slug}" role="button" tabindex="0">${escapeHtml(sistema.name)}</div>`
+  ).join('');
+  wireSingleSelectChips('sm-componente-row', 'smComp', v => smComponente = v);
+}
 
 // ---- Componente intervenido (alimenta la ficha de vida en Componentes del Activo) ----
+// Las opciones son los Sistemas del activo, igual que arriba — se repintan en
+// cada apertura del formulario (ver renderChipsDeSistema).
 let componenteIntervenido = 'ninguno';
-const compChips = document.querySelectorAll('#comp-intervenido-row .comp-chip');
 const empresaLabel = document.getElementById('empresa-section-label');
 const empresaTipoRow = document.getElementById('empresa-tipo-row');
 const empresaInterno = document.getElementById('empresa-interno');
 const empresaExterno = document.getElementById('empresa-externo');
 const empresaExternoNombre = document.getElementById('empresa-externo-nombre');
 
-compChips.forEach(chip => {
-  const seleccionar = () => {
-    compChips.forEach(c => c.classList.remove('selected'));
-    chip.classList.add('selected');
-    componenteIntervenido = chip.dataset.comp;
-    const mostrar = componenteIntervenido !== 'ninguno';
-    empresaLabel.classList.toggle('hidden', !mostrar);
-    empresaTipoRow.classList.toggle('hidden', !mostrar);
-    if (!mostrar) empresaExternoNombre.classList.add('hidden');
-    else if (empresaExterno.classList.contains('selected')) empresaExternoNombre.classList.remove('hidden');
-  };
-  chip.addEventListener('click', seleccionar);
-  chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seleccionar(); } });
-});
+function renderCompIntervenidoRow(){
+  const row = document.getElementById('comp-intervenido-row');
+  const chipsHtml = ['<div class="comp-chip selected" data-comp="ninguno" role="button" tabindex="0">Ninguno</div>']
+    .concat(obtenerSistemasActivo().map((sistema) =>
+      `<div class="comp-chip" data-comp="${sistema.slug}" role="button" tabindex="0">${escapeHtml(sistema.name)}</div>`
+    ));
+  row.innerHTML = chipsHtml.join('');
+
+  const compChips = row.querySelectorAll('.comp-chip');
+  compChips.forEach(chip => {
+    const seleccionar = () => {
+      compChips.forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      componenteIntervenido = chip.dataset.comp;
+      const mostrar = componenteIntervenido !== 'ninguno';
+      empresaLabel.classList.toggle('hidden', !mostrar);
+      empresaTipoRow.classList.toggle('hidden', !mostrar);
+      if (!mostrar) empresaExternoNombre.classList.add('hidden');
+      else if (empresaExterno.classList.contains('selected')) empresaExternoNombre.classList.remove('hidden');
+    };
+    chip.addEventListener('click', seleccionar);
+    chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seleccionar(); } });
+  });
+}
+
+// Repinta las 3 filas de chips que dependen del activo abierto (Sistemas
+// activos) — se llama al abrir el formulario de Informe, nunca al cargar el
+// script, porque el activo puede cambiar entre una apertura y la siguiente.
+async function renderChipsDeSistema(){
+  await cargarSistemasActivo();
+  renderInstrUsadosRow();
+  renderCompIntervenidoRow();
+  renderSmComponenteRow();
+}
 
 empresaInterno.addEventListener('click', () => {
   empresaInterno.classList.add('selected');
@@ -322,7 +356,7 @@ function validarInforme(){
 // Abre el formulario de informe ya con los campos iniciales listos — separado
 // del listener para poder llamarlo también después de un login pedido a mitad
 // de camino (ver pendingDestino === 'informe' en auth.js).
-export function abrirFormularioInforme(){
+export async function abrirFormularioInforme(){
   document.getElementById('informe-tecnico').textContent = welcomeName.textContent || 'usuario';
   // Quedaban con el texto de demo fijo ("Camión MT65S" / "TS-CAEX-0000125")
   // sin importar qué activo estuviera realmente abierto — mismo descuido que
@@ -336,6 +370,9 @@ export function abrirFormularioInforme(){
     day: '2-digit', month: '2-digit', year: 'numeric'
   });
   goTo('step-informe');
+  await renderChipsDeSistema();
+  componenteIntervenido = 'ninguno';
+  smTipo = null; smPrioridad = null; smComponente = null;
   requestAnimationFrame(() => {
     resizeSignatureCanvas();
     hasSignature = false;
@@ -344,12 +381,8 @@ export function abrirFormularioInforme(){
     setInstructivosUsados(false);
     document.getElementById('informe-alcances').value = '';
     setSmAplica(false);
-    smTipo = null; smPrioridad = null; smComponente = null;
-    document.querySelectorAll('#sm-tipo-row .comp-chip, #sm-prioridad-row .comp-chip, #sm-componente-row .comp-chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#sm-tipo-row .comp-chip, #sm-prioridad-row .comp-chip').forEach(c => c.classList.remove('selected'));
     document.getElementById('sm-descripcion').value = '';
-    componenteIntervenido = 'ninguno';
-    document.querySelectorAll('#comp-intervenido-row .comp-chip').forEach(c => c.classList.remove('selected'));
-    document.querySelector('#comp-intervenido-row .comp-chip[data-comp="ninguno"]').classList.add('selected');
     document.getElementById('empresa-section-label').classList.add('hidden');
     document.getElementById('empresa-tipo-row').classList.add('hidden');
     document.getElementById('empresa-interno').classList.add('selected');
@@ -409,7 +442,7 @@ export function construirInformeHTML(data){
     <div class="preview-h">Instructivos de verificación</div>
     <div class="preview-p">${data.instructivosUsados && data.instructivosNombres.length ? data.instructivosNombres.map(n => '• ' + escapeHtml(n)).join('<br>') : 'No se utilizaron instructivos'}</div>
     ${data.alcances ? `<div class="preview-h">Alcances técnicos del mantenedor</div><p class="preview-p">${escapeHtml(data.alcances)}</p>` : ''}
-    ${data.smAplica ? `<div class="preview-h">Solicitud de Mantenimiento</div><p class="preview-p"><b>${escapeHtml(data.smFolio || 'SM')}</b> · ${escapeHtml(data.smTipo || '')} · Prioridad ${escapeHtml(data.smPrioridad || '')}${data.smComponente && COMPONENTE_META[data.smComponente] ? ' · ' + escapeHtml(COMPONENTE_META[data.smComponente].nombre) : ''}<br>${escapeHtml(data.smDescripcion || '')}</p>` : ''}
+    ${data.smAplica ? `<div class="preview-h">Solicitud de Mantenimiento</div><p class="preview-p"><b>${escapeHtml(data.smFolio || 'SM')}</b> · ${escapeHtml(data.smTipo || '')} · Prioridad ${escapeHtml(data.smPrioridad || '')}${data.smComponenteNombre ? ' · ' + escapeHtml(data.smComponenteNombre) : ''}<br>${escapeHtml(data.smDescripcion || '')}</p>` : ''}
     ${data.observaciones ? `<div class="preview-h">Recomendaciones</div><p class="preview-p">${escapeHtml(data.observaciones)}</p>` : ''}
     ${fotosHtml}
     <div class="preview-h">Firma del técnico</div>
@@ -442,15 +475,17 @@ btnPreviewInforme.addEventListener('click', () => {
     operativo: document.getElementById('check-operativo').classList.contains('on'),
     observaciones: informeObservaciones.value.trim(),
     instructivosUsados: instructivosUsados,
-    instructivosNombres: Array.from(instructivosSeleccionados).map(k => INSTRUCTIVOS[k].nombre),
+    instructivosNombres: Array.from(instructivosSeleccionados).map(k => nombreSistema(k)),
     alcances: informeAlcances.value.trim(),
     componente: componenteIntervenido !== 'ninguno' ? componenteIntervenido : null,
+    componenteNombre: componenteIntervenido !== 'ninguno' ? nombreSistema(componenteIntervenido) : null,
     empresa: null,
     smAplica: smAplica,
     smFolio: null,
     smTipo: smTipo,
     smPrioridad: smPrioridad,
     smComponente: smComponente,
+    smComponenteNombre: smComponente ? nombreSistema(smComponente) : null,
     smDescripcion: smDescripcion.value.trim(),
     fotos: informeFotos.slice(),
     firmaDataUrl: sigCanvas.toDataURL('image/png'),

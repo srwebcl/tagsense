@@ -8,7 +8,6 @@
 // en IndexedDB de este dispositivo y reintenta solo cuando vuelve la conexión.
 
 import { mostrarToast, goTo } from './core.js';
-import { COMPONENTE_META } from './componentes.js';
 import { generarInformePdf } from './informe-pdf.js';
 import { obtenerFolioInforme, incrementarFolioInforme } from './informe-form.js';
 import { informeState } from './informe-state.js';
@@ -252,7 +251,7 @@ document.getElementById('btn-informe-whatsapp').addEventListener('click', async 
     }
     if (d.alcances) mensaje += `\nAlcances técnicos: ${d.alcances}\n`;
     if (d.smAplica) {
-      const compNombre = d.smComponente && COMPONENTE_META[d.smComponente] ? COMPONENTE_META[d.smComponente].nombre : '';
+      const compNombre = d.smComponenteNombre || '';
       mensaje += `\n*Solicitud de Mantenimiento:* ${d.smFolio || 'SM'} — ${d.smTipo || ''} · Prioridad ${d.smPrioridad || ''}${compNombre ? ' · ' + compNombre : ''}\n${d.smDescripcion || ''}\n`;
     }
     if (d.observaciones) mensaje += `\nRecomendaciones: ${d.observaciones}\n`;

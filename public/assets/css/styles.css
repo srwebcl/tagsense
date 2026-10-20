@@ -838,6 +838,7 @@
   }
   .comp-hist-item b{ color:var(--text-hi); }
   .comp-hist-empty{ padding:6px 14px 14px; font-size:11.5px; color:var(--text-low); font-style:italic; }
+  .comp-hist-empty-inline{ color:var(--text-low); font-style:italic; }
 
   /* ===== INSTRUCTIVOS DE VERIFICACIÓN ===== */
   .instructivo-card{
