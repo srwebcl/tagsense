@@ -91,6 +91,41 @@
 .categorias-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
 .chip-list{ display:flex; flex-wrap:wrap; gap:8px; }
 
+/* ===== Tabla de catálogo (estilo admin de WordPress) ===== */
+.catalogo-tabla-wrap{ border:1px solid var(--graphite-line); border-radius:12px; overflow:hidden; }
+.catalogo-tabla{ width:100%; border-collapse:collapse; }
+.catalogo-tabla thead th{
+  text-align:left; font-size:10.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+  color:var(--text-low); background:rgba(255,255,255,0.03); padding:10px 14px; border-bottom:1px solid var(--graphite-line);
+}
+.catalogo-row{ border-bottom:1px solid var(--graphite-line); transition:background .12s ease; }
+.catalogo-row:last-child{ border-bottom:none; }
+.catalogo-row:hover{ background:rgba(255,255,255,0.025); }
+.catalogo-row td{ padding:11px 14px; font-size:13.5px; color:var(--text-hi); vertical-align:middle; }
+.catalogo-row-nombre{ font-weight:600; }
+.catalogo-row-uso{ color:var(--text-mid); font-size:12.5px; white-space:nowrap; }
+.catalogo-sin-uso{ color:var(--text-low); font-style:italic; }
+.catalogo-row-acciones{ text-align:right; width:1%; white-space:nowrap; }
+.catalogo-eliminar{
+  background:none; border:none; color:var(--text-low); font-size:12px; font-weight:600;
+  cursor:pointer; padding:4px 8px; border-radius:6px; opacity:0.7;
+}
+.catalogo-row:hover .catalogo-eliminar{ opacity:1; }
+.catalogo-eliminar:hover{ color:var(--err); background:rgba(201,18,51,0.1); }
+.catalogo-vacio{ text-align:center; color:var(--text-mid); font-size:13px; padding:20px 14px !important; }
+.catalogo-form-nuevo{
+  display:flex; gap:8px; padding:12px 14px; background:rgba(255,255,255,0.02);
+  border-top:1px solid var(--graphite-line);
+}
+.catalogo-form-nuevo input{
+  flex:1; background:var(--graphite); border:1.5px solid var(--graphite-line); border-radius:9px;
+  padding:9px 12px; color:var(--text-hi); font-size:13px; font-family:inherit; outline:none;
+}
+.catalogo-form-nuevo input:focus{ border-color:var(--copper-2); }
+.catalogo-form-nuevo .btn-outline{ height:auto; padding:0 16px; font-size:11.5px; }
+
+.plantilla-checklist{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
+
 .plantilla-checklist{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; }
 .plantilla-check-item{
   display:flex; align-items:center; gap:10px; padding:10px 12px;

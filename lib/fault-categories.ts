@@ -68,6 +68,35 @@ export async function listarPlantillasPorTipo(tenantId: string): Promise<Record<
   return porTipo;
 }
 
+// Cuántos activos tiene cada tipo — se muestra en /admin/categorias para que
+// la lista se vea como un catálogo real en uso, no solo nombres sueltos.
+export async function contarActivosPorTipo(tenantId: string): Promise<Record<string, number>> {
+  const result = await pool.query<{ asset_type: string; total: string }>(
+    `select asset_type, count(*)::int as total from assets where tenant_id = $1 and asset_type is not null group by asset_type`,
+    [tenantId]
+  );
+  return Object.fromEntries(result.rows.map((r) => [r.asset_type, Number(r.total)]));
+}
+
+// Cuántos activos tienen cada sistema activo en su ficha técnica.
+export async function contarActivosPorSistema(tenantId: string): Promise<Record<string, number>> {
+  const result = await pool.query<{ category_slug: string; total: string }>(
+    `select category_slug, count(*)::int as total from asset_components where tenant_id = $1 group by category_slug`,
+    [tenantId]
+  );
+  return Object.fromEntries(result.rows.map((r) => [r.category_slug, Number(r.total)]));
+}
+
+// Cuántos documentos de ficha técnica usan cada sección (Equipamiento, Fallas...).
+export async function contarDocumentosPorTipoFicha(tenantId: string): Promise<Record<string, number>> {
+  const result = await pool.query<{ field_type_slug: string; total: string }>(
+    `select field_type_slug, count(*)::int as total from asset_documents
+     where tenant_id = $1 and field_type_slug is not null group by field_type_slug`,
+    [tenantId]
+  );
+  return Object.fromEntries(result.rows.map((r) => [r.field_type_slug, Number(r.total)]));
+}
+
 // El admin escribe el nombre ("Neumáticos") y se deriva un slug estable para
 // guardar/matchear (sin tildes, minúsculas, guiones) — mismo criterio simple
 // que ya usa el resto del proyecto para tag_code/ids legibles.

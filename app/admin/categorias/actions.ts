@@ -96,3 +96,27 @@ export async function alternarComponenteDeTipo(assetType: string, categorySlug: 
 
   revalidatePath("/admin/categorias");
 }
+
+// Borrar no falla aunque el catálogo esté en uso (mismo criterio que
+// WordPress con categorías de posts): los activos/documentos que ya tenían
+// ese valor lo conservan como dato histórico, solo deja de aparecer como
+// opción para elegir de ahora en adelante.
+export async function eliminarCategoriaFalla(slug: string) {
+  const appUser = await requireAdmin();
+  await pool.query(`delete from fault_categories where tenant_id = $1 and slug = $2`, [appUser.tenant_id, slug]);
+  await pool.query(`delete from asset_type_components where tenant_id = $1 and category_slug = $2`, [appUser.tenant_id, slug]);
+  revalidatePath("/admin/categorias");
+}
+
+export async function eliminarTipoFicha(slug: string) {
+  const appUser = await requireAdmin();
+  await pool.query(`delete from ficha_field_types where tenant_id = $1 and slug = $2`, [appUser.tenant_id, slug]);
+  revalidatePath("/admin/categorias");
+}
+
+export async function eliminarTipoDeActivo(nombre: string) {
+  const appUser = await requireAdmin();
+  await pool.query(`delete from asset_types where tenant_id = $1 and name = $2`, [appUser.tenant_id, nombre]);
+  await pool.query(`delete from asset_type_components where tenant_id = $1 and asset_type = $2`, [appUser.tenant_id, nombre]);
+  revalidatePath("/admin/categorias");
+}
