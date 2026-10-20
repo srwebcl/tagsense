@@ -58,10 +58,15 @@ export function generarInformePdf(data){
   doc.setTextColor(...COPPER_LIGHT);
   doc.text(`Documento técnico N° ${docNum}`, marginX + 20, 17.5);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(...COPPER);
-  doc.text('TAGSENSE', pageW - marginX, 11, { align: 'right' });
+  const logoW = 17.8, logoH = 6;
+  try {
+    doc.addImage('assets/img/logo-tagsense.png', 'PNG', pageW - marginX - logoW, 6.5, logoW, logoH);
+  } catch (e) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...COPPER);
+    doc.text('TAGSENSE', pageW - marginX, 11, { align: 'right' });
+  }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(150, 148, 140);
