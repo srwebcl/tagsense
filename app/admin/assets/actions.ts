@@ -9,7 +9,7 @@ import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
 import { indexDocument, indexSimulatedText } from "@/lib/indexing";
 import { detectImageKind, isPdf } from "@/lib/file-validation";
-import { listarCategoriasFalla, slugificar } from "@/lib/fault-categories";
+import { listarTiposFicha } from "@/lib/fault-categories";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
   const n = parseInt(String(raw || "").trim(), 10);
@@ -279,17 +279,18 @@ export async function subirDocumento(assetId: string, formData: FormData) {
   redirect(`/admin/assets/${assetId}`);
 }
 
-// Constructor de ficha por categoría — para un activo sin manual PDF real, el
-// admin escribe/pega la info técnica POR SISTEMA (Frenos, Dirección, etc., ver
-// fault_categories) en vez de un solo bloque de texto. Cada categoría llena se
-// guarda como su propio documento "simulado" (una categoría = un documento =
-// casi siempre un solo chunk), entra al MISMO pipeline de indexado que un PDF
-// subido, y queda etiquetada con category_slug — así cuando el técnico toca el
-// tile de "Frenos" en la app de campo, el asistente sabe con certeza cuál
-// documento usar en vez de adivinar por similitud semántica (ver
-// app/api/assistant/chat/route.ts). Categorías que llegan vacías borran su
-// documento si ya existía (el admin se arrepintió o lo limpió).
-export async function guardarFichaPorCategorias(assetId: string, formData: FormData) {
+// Constructor de ficha técnica — para un activo sin manual PDF real (o como
+// complemento de uno), el admin completa la info técnica por SISTEMA (Frenos,
+// Dirección...) Y por TIPO DE FICHA dentro de ese sistema (Equipamiento,
+// Fallas principales, Procedimientos — ver fault_categories/ficha_field_types).
+// Cada celda llena (sistema × tipo) se guarda como su propio documento, entra
+// al MISMO pipeline de indexado que un PDF subido, y queda etiquetada con
+// category_slug + field_type_slug — así el asistente puede apuntar con
+// precisión a "las fallas de frenos" en vez de todo el bloque de frenos (ver
+// app/api/assistant/chat/route.ts). Se guarda UN sistema a la vez (la UI es
+// de pestañas, ver app/admin/assets/[id]/ficha) — más simple y predecible que
+// mandar las ~24 celdas de todos los sistemas en cada submit.
+export async function guardarFichaDeSistema(assetId: string, categorySlug: string, formData: FormData) {
   const appUser = await requireAdmin();
 
   const assetResult = await pool.query(
@@ -300,20 +301,29 @@ export async function guardarFichaPorCategorias(assetId: string, formData: FormD
     throw new Error("Activo no encontrado.");
   }
 
-  const categorias = await listarCategoriasFalla(appUser.tenant_id);
+  const categoriaResult = await pool.query(
+    `select slug, name from fault_categories where tenant_id = $1 and slug = $2 limit 1`,
+    [appUser.tenant_id, categorySlug]
+  );
+  const categoria = categoriaResult.rows[0];
+  if (!categoria) {
+    throw new Error("Sistema no encontrado.");
+  }
+
+  const tipos = await listarTiposFicha(appUser.tenant_id);
 
   const existentesResult = await pool.query(
-    `select id, category_slug from asset_documents
-     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated' and category_slug is not null`,
-    [appUser.tenant_id, assetId]
+    `select id, field_type_slug from asset_documents
+     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated' and category_slug = $3 and field_type_slug is not null`,
+    [appUser.tenant_id, assetId, categorySlug]
   );
-  const existentesPorSlug = new Map<string, string>(existentesResult.rows.map((r) => [r.category_slug, r.id]));
+  const existentesPorSlug = new Map<string, string>(existentesResult.rows.map((r) => [r.field_type_slug, r.id]));
 
   const documentosAIndexar: string[] = [];
 
-  for (const categoria of categorias) {
-    const contenido = String(formData.get(`cat_${categoria.slug}`) || "").trim();
-    const existenteId = existentesPorSlug.get(categoria.slug);
+  for (const tipo of tipos) {
+    const contenido = String(formData.get(`campo_${tipo.slug}`) || "").trim();
+    const existenteId = existentesPorSlug.get(tipo.slug);
 
     if (!contenido) {
       if (existenteId) {
@@ -322,20 +332,22 @@ export async function guardarFichaPorCategorias(assetId: string, formData: FormD
       continue;
     }
 
+    const titulo = `${categoria.name} — ${tipo.name}`;
+
     if (existenteId) {
       await pool.query(`update asset_documents set raw_text = $1, title = $2 where tenant_id = $3 and id = $4`, [
         contenido,
-        categoria.name,
+        titulo,
         appUser.tenant_id,
         existenteId,
       ]);
       documentosAIndexar.push(existenteId);
     } else {
       const docResult = await pool.query(
-        `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, category_slug, uploaded_by)
-         values ($1, $2, $3, null, $4, 'simulated', $5, $6)
+        `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, category_slug, field_type_slug, uploaded_by)
+         values ($1, $2, $3, null, $4, 'simulated', $5, $6, $7)
          returning id`,
-        [appUser.tenant_id, assetId, categoria.name, contenido, categoria.slug, appUser.id]
+        [appUser.tenant_id, assetId, titulo, contenido, categorySlug, tipo.slug, appUser.id]
       );
       documentosAIndexar.push(docResult.rows[0].id);
     }
@@ -345,33 +357,9 @@ export async function guardarFichaPorCategorias(assetId: string, formData: FormD
     after(() => indexSimulatedText(documentId, appUser.tenant_id));
   }
 
+  revalidatePath(`/admin/assets/${assetId}/ficha`);
   revalidatePath(`/admin/assets/${assetId}`);
-  redirect(`/admin/assets/${assetId}`);
-}
-
-// Catálogo de categorías de falla — mismo patrón que registrarTipoDeActivo:
-// crece desde el punto de uso (el propio constructor de ficha), sin pantalla
-// de administración aparte. Es tenant-wide (no por activo), por eso no valida
-// el assetId más que para saber a dónde volver después.
-export async function crearCategoriaFalla(assetId: string, formData: FormData) {
-  const appUser = await requireAdmin();
-
-  const nombre = String(formData.get("nombre_categoria") || "").trim();
-  if (!nombre) {
-    throw new Error("Falta el nombre de la categoría.");
-  }
-  const slug = slugificar(nombre);
-  if (!slug) {
-    throw new Error("El nombre de la categoría no es válido.");
-  }
-
-  await pool.query(
-    `insert into fault_categories (tenant_id, slug, name) values ($1, $2, $3) on conflict (tenant_id, slug) do nothing`,
-    [appUser.tenant_id, slug, nombre]
-  );
-
-  revalidatePath(`/admin/assets/${assetId}`);
-  redirect(`/admin/assets/${assetId}`);
+  redirect(`/admin/assets/${assetId}/ficha?sistema=${categorySlug}`);
 }
 
 export async function reindexarDocumento(assetId: string, documentId: string) {

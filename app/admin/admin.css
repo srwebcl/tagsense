@@ -85,6 +85,42 @@
 }
 
 .admin-container{ max-width:880px; margin:0 auto; padding:32px 24px 60px; }
+.admin-container-wide{ max-width:1320px; }
+
+/* ===== Páginas de escritorio real (Categorías, Ficha técnica) ===== */
+.categorias-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
+.chip-list{ display:flex; flex-wrap:wrap; gap:8px; }
+
+.ficha-layout{ display:flex; gap:24px; align-items:flex-start; }
+.ficha-sidebar{
+  display:flex; flex-direction:column; gap:2px; flex-shrink:0; width:220px;
+  background:var(--graphite); border:1px solid var(--graphite-line); border-radius:14px; padding:8px;
+  position:sticky; top:84px;
+}
+.ficha-sidebar-item{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer;
+  font-size:13px; font-weight:600; color:var(--text-mid); text-align:left; width:100%;
+  transition:background .15s ease, color .15s ease;
+}
+.ficha-sidebar-item:hover{ background:rgba(255,255,255,0.04); color:var(--text-hi); }
+.ficha-sidebar-item.active{ background:rgba(208,120,56,0.14); color:var(--copper-2); }
+.ficha-sidebar-item .dot-lleno{ width:7px; height:7px; border-radius:50%; background:var(--ok); flex-shrink:0; }
+.ficha-content{ flex:1; min-width:0; }
+.ficha-field-group{ margin-bottom:18px; }
+.ficha-field-group label{
+  display:block; font-size:10.5px; font-weight:700; letter-spacing:1.6px;
+  color:var(--copper-1); text-transform:uppercase; margin-bottom:8px;
+}
+
+@media (max-width: 760px){
+  .ficha-layout{ flex-direction:column; }
+  .ficha-sidebar{
+    flex-direction:row; width:100%; overflow-x:auto; position:static;
+    gap:6px;
+  }
+  .ficha-sidebar-item{ width:auto; flex-shrink:0; white-space:nowrap; }
+}
 
 /* ===== Login (reutiliza el look del login de campo) ===== */
 .admin-login-wrap{

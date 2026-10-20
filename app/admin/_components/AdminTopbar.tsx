@@ -19,6 +19,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: "/admin/categorias",
+    label: "Categorías",
+    match: (path: string) => path.startsWith("/admin/categorias"),
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3 3 8l9 5 9-5-9-5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M3 16l9 5 9-5M3 12l9 5 9-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/users",
     label: "Usuarios",
     match: (path: string) => path.startsWith("/admin/users"),

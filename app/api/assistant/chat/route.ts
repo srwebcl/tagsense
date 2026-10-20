@@ -4,6 +4,7 @@ import { embedQuery } from "@/lib/voyage";
 import { anthropic } from "@/lib/anthropic";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withErrorLogging } from "@/lib/api-handler";
+import { listarTiposFicha, type FichaFieldType } from "@/lib/fault-categories";
 
 const TOP_K = 6;
 const MODEL = "claude-sonnet-5-5"; // ver /tagsense-docs/skills/rag-assistant/SKILL.md: Sonnet por defecto
@@ -88,19 +89,47 @@ type ChunkConScore<T> = T & { _keywordScore: number };
 // Cuando el técnico toca un tile de síntoma ("Tengo una falla en los frenos")
 // en vez de escribir una pregunta libre, viene con category_slug="frenos" —
 // un bono enorme asegura que el documento de ESA categoría exacta (si el admin
-// cargó una ficha para ella, ver crearInformacionSimulada) siempre quede
+// cargó una ficha para ella, ver guardarFichaDeSistema) siempre quede
 // primero, sin depender de que el re-ranking por palabras adivine bien.
 const BONO_CATEGORIA_EXACTA = 1000;
+// Más chico que el de categoría: la pregunta libre puede nombrar el tipo de
+// ficha sin querer ("¿cuáles son las fallas?") — ayuda a desempatar entre
+// celdas del mismo sistema (Equipamiento vs Fallas vs Procedimientos), pero no
+// debería tapar una coincidencia de categoría explícita por tile.
+const BONO_TIPO_FICHA = 50;
 
-function reordenarPorPalabrasClave<T extends { content: string; category_slug: string | null }>(
+// Sinónimos para los 3 tipos de ficha que vienen de fábrica (ver migración
+// 0016) — una pregunta dice "modelo" o "falla", no necesariamente "equipamiento"
+// o "fallas principales" tal cual. Un tipo de ficha custom que agregue el admin
+// solo matchea por su propio nombre/slug literal, sin sinónimos inventados.
+const SINONIMOS_TIPO_FICHA: Record<string, string[]> = {
+  equipamiento: ["modelo", "marca", "especificacion", "especificaciones", "spec", "specs"],
+  fallas: ["falla", "fallas", "problema", "problemas", "sintoma", "sintomas"],
+  procedimientos: ["procedimiento", "pasos", "como", "revisar", "reparar", "cambiar"],
+};
+
+function detectarTipoFichaSolicitado(keywords: string[], tipos: FichaFieldType[]): string | null {
+  for (const tipo of tipos) {
+    const nombreNormalizado = normalizarTexto(tipo.name).split(/[^a-z0-9]+/).filter(Boolean);
+    const sinonimos = SINONIMOS_TIPO_FICHA[tipo.slug] || [];
+    if (keywords.some((kw) => kw === tipo.slug || nombreNormalizado.includes(kw) || sinonimos.includes(kw))) {
+      return tipo.slug;
+    }
+  }
+  return null;
+}
+
+function reordenarPorPalabrasClave<T extends { content: string; category_slug: string | null; field_type_slug?: string | null }>(
   chunks: T[],
   keywords: string[],
-  categorySlug: string | null
+  categorySlug: string | null,
+  fieldTypeSlug: string | null
 ): ChunkConScore<T>[] {
   const conScore = chunks.map((c) => {
     const scoreKeywords = keywords.length ? contarCoincidencias(normalizarTexto(c.content), keywords) : 0;
-    const bono = categorySlug && c.category_slug === categorySlug ? BONO_CATEGORIA_EXACTA : 0;
-    return { ...c, _keywordScore: scoreKeywords + bono };
+    const bonoCategoria = categorySlug && c.category_slug === categorySlug ? BONO_CATEGORIA_EXACTA : 0;
+    const bonoTipo = fieldTypeSlug && c.field_type_slug === fieldTypeSlug ? BONO_TIPO_FICHA : 0;
+    return { ...c, _keywordScore: scoreKeywords + bonoCategoria + bonoTipo };
   });
   return conScore.sort((a, b) => b._keywordScore - a._keywordScore);
 }
@@ -139,32 +168,54 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
 
   // Embedding de la pregunta (input_type "query", distinto del usado para indexar
   // los documentos — mejora la calidad de la búsqueda semántica asimétrica).
-  const queryVector = await embedQuery(message);
+  // Voyage también puede fallar (rate limit sin método de pago, caída del
+  // servicio) — mismo espíritu que el respaldo de Claude: sin embeddings no
+  // hay forma de ordenar por similitud semántica, pero el re-ranking por
+  // palabras clave (más abajo) igual puede encontrar lo relevante entre TODOS
+  // los chunks indexados de este activo, en vez de dejar caer la consulta entera.
+  let queryVector: number[] | null = null;
+  try {
+    queryVector = await embedQuery(message);
+  } catch (err) {
+    console.error(`[assistant/chat] Voyage no disponible, retrocede a solo palabras clave (tenant ${appUser.tenant_id}, asset ${assetId}):`, err);
+  }
 
   // Busca los chunks más relevantes, filtrados SIEMPRE por tenant_id — nunca se
   // debe poder recuperar contexto de otro tenant (ver skill rag-assistant).
   // Se incluyen documentos asociados directo a este activo o a su modelo.
-  const chunksResult = await pool.query(
-    `select dc.content, ad.title, ad.id as document_id, ad.category_slug,
-            dc.embedding <=> $1::vector as distance
-     from document_chunks dc
-     join asset_documents ad on ad.id = dc.document_id
-     where dc.tenant_id = $2
-       and (ad.asset_id = $3 or (ad.asset_model is not null and ad.asset_model = $4))
-       and ad.index_status = 'indexed'
-     order by dc.embedding <=> $1::vector
-     limit $5`,
-    [toVectorLiteral(queryVector), appUser.tenant_id, assetId, asset.model, TOP_K]
-  );
+  const chunksResult = queryVector
+    ? await pool.query(
+        `select dc.content, ad.title, ad.id as document_id, ad.category_slug, ad.field_type_slug,
+                dc.embedding <=> $1::vector as distance
+         from document_chunks dc
+         join asset_documents ad on ad.id = dc.document_id
+         where dc.tenant_id = $2
+           and (ad.asset_id = $3 or (ad.asset_model is not null and ad.asset_model = $4))
+           and ad.index_status = 'indexed'
+         order by dc.embedding <=> $1::vector
+         limit $5`,
+        [toVectorLiteral(queryVector), appUser.tenant_id, assetId, asset.model, TOP_K]
+      )
+    : await pool.query(
+        `select dc.content, ad.title, ad.id as document_id, ad.category_slug, ad.field_type_slug
+         from document_chunks dc
+         join asset_documents ad on ad.id = dc.document_id
+         where dc.tenant_id = $1
+           and (ad.asset_id = $2 or (ad.asset_model is not null and ad.asset_model = $3))
+           and ad.index_status = 'indexed'
+         order by dc.chunk_index asc
+         limit $4`,
+        [appUser.tenant_id, assetId, asset.model, TOP_K * 4]
+      );
 
   // Si vino de un tile de síntoma (category_slug), el chunk de esa categoría
   // exacta puede no colarse en el TOP_K por similitud vectorial pura (ocurre
-  // con fichas simuladas cortas) — se trae aparte y se funde con el resto,
+  // con fichas técnicas cortas) — se trae aparte y se funde con el resto,
   // para no depender de que el embedding "adivine" que es el más relevante.
   let candidatos = chunksResult.rows;
   if (categorySlug) {
     const categoriaResult = await pool.query(
-      `select dc.content, ad.title, ad.id as document_id, ad.category_slug
+      `select dc.content, ad.title, ad.id as document_id, ad.category_slug, ad.field_type_slug
        from document_chunks dc
        join asset_documents ad on ad.id = dc.document_id
        where dc.tenant_id = $1 and ad.asset_id = $2 and ad.category_slug = $3 and ad.index_status = 'indexed'
@@ -176,7 +227,9 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   }
 
   const keywords = extraerPalabrasClave(message, asset.name);
-  const chunksOrdenados = reordenarPorPalabrasClave(candidatos, keywords, categorySlug);
+  const tiposFicha = await listarTiposFicha(appUser.tenant_id);
+  const fieldTypeSlug = detectarTipoFichaSolicitado(keywords, tiposFicha);
+  const chunksOrdenados = reordenarPorPalabrasClave(candidatos, keywords, categorySlug, fieldTypeSlug);
 
   const sources = [...new Set(chunksOrdenados.map((r) => r.title))];
 
@@ -210,7 +263,7 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
     // de Anthropic) en vez de mostrar un error.
     console.error(`[assistant/chat] Claude no disponible, usando respaldo extractivo (tenant ${appUser.tenant_id}, asset ${assetId}):`, err);
     fallback = true;
-    answer = construirRespuestaRespaldo(asset.name, chunksOrdenados, keywords, categorySlug);
+    answer = construirRespuestaRespaldo(asset.name, chunksOrdenados, keywords, categorySlug, fieldTypeSlug);
   }
 
   await pool.query(
@@ -282,12 +335,13 @@ function extraerVentanaCentrada(texto: string, keywords: string[], maxChars: num
 
 function construirRespuestaRespaldo(
   nombreActivo: string,
-  chunks: { content: string; title: string; category_slug: string | null }[],
+  chunks: { content: string; title: string; category_slug: string | null; field_type_slug?: string | null }[],
   keywords: string[],
-  categorySlug: string | null
+  categorySlug: string | null,
+  fieldTypeSlug: string | null
 ): string {
   if (chunks.length === 0) {
-    return `No encuentro documentación cargada todavía para "${nombreActivo}". Puedes subir un manual o agregar información simulada desde el panel de administración.`;
+    return `No encuentro documentación cargada todavía para "${nombreActivo}". Puedes subir un manual o completar la ficha técnica desde el panel de administración.`;
   }
 
   type OracionConScore = { texto: string; titulo: string; score: number };
@@ -295,18 +349,22 @@ function construirRespuestaRespaldo(
   const vistos = new Set<string>();
 
   for (const chunk of chunks) {
-    // Si el chunk viene de la categoría exacta que tocó el técnico, cada
-    // oración suya es relevante por definición (el admin la escribió
-    // específicamente para esa categoría) — no depende de que además
-    // contenga alguna palabra literal de la pregunta.
+    // Si el chunk viene de la categoría exacta que tocó el técnico (tile) o del
+    // tipo de ficha exacto que nombró la pregunta libre ("fallas", "modelo"),
+    // cada oración suya es relevante por definición — el admin la escribió
+    // específicamente para esa celda, no depende de que además contenga
+    // alguna palabra literal adicional de la pregunta.
     const esDeCategoriaExacta = Boolean(categorySlug && chunk.category_slug === categorySlug);
+    const esDeTipoFichaExacto = Boolean(fieldTypeSlug && chunk.field_type_slug === fieldTypeSlug);
+    const esRelevantePorEtiqueta = esDeCategoriaExacta || esDeTipoFichaExacto;
     for (const oracion of dividirEnOraciones(chunk.content)) {
       const normalizada = normalizarTexto(oracion);
       if (vistos.has(normalizada)) continue; // los chunks se solapan al indexar (ver CHUNK_OVERLAP en lib/indexing.ts)
       vistos.add(normalizada);
       const scoreKeywords = keywords.length ? contarCoincidencias(normalizada, keywords) : 0;
-      if (!esDeCategoriaExacta && keywords.length > 0 && scoreKeywords === 0) continue; // sin ninguna palabra de la pregunta, no sirve de respuesta
-      const score = scoreKeywords + (esDeCategoriaExacta ? BONO_CATEGORIA_EXACTA : 0);
+      if (!esRelevantePorEtiqueta && keywords.length > 0 && scoreKeywords === 0) continue; // sin ninguna palabra de la pregunta, no sirve de respuesta
+      const score =
+        scoreKeywords + (esDeCategoriaExacta ? BONO_CATEGORIA_EXACTA : 0) + (esDeTipoFichaExacto ? BONO_TIPO_FICHA : 0);
       const texto = extraerVentanaCentrada(oracion, keywords, FALLBACK_MAX_CHARS_ORACION);
       oraciones.push({ texto, titulo: chunk.title, score });
     }

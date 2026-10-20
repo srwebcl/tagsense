@@ -3,21 +3,17 @@ import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import {
   subirDocumento,
-  guardarFichaPorCategorias,
-  crearCategoriaFalla,
   reindexarDocumento,
   eliminarActivo,
   subirFotoActivo,
   resolverSolicitudAdmin,
 } from "@/app/admin/assets/actions";
 import { uploads } from "@/lib/storage";
-import { listarCategoriasFalla } from "@/lib/fault-categories";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
 import { CopyTagLinkButton } from "@/app/admin/_components/CopyTagLinkButton";
-import { NuevaCategoriaForm } from "@/app/admin/_components/NuevaCategoriaForm";
 
 const STATUS_LABEL: Record<string, string> = {
   operativo: "Operativo",
@@ -81,14 +77,6 @@ export default async function AssetDetailPage({
     [appUser.tenant_id, id]
   );
 
-  const categorias = await listarCategoriasFalla(appUser.tenant_id);
-  const fichaActualResult = await pool.query(
-    `select category_slug, raw_text from asset_documents
-     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated' and category_slug is not null`,
-    [appUser.tenant_id, id]
-  );
-  const fichaActualPorSlug = new Map<string, string>(fichaActualResult.rows.map((r) => [r.category_slug, r.raw_text || ""]));
-
   const solicitudesResult = await pool.query(
     `select id, folio, tipo, prioridad, componente, descripcion, estado, created_at, resolved_at
      from maintenance_requests where tenant_id = $1 and asset_id = $2 order by created_at desc`,
@@ -96,8 +84,6 @@ export default async function AssetDetailPage({
   );
 
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
-  const guardarFichaDeEsteActivo = guardarFichaPorCategorias.bind(null, id);
-  const crearCategoriaDeEsteActivo = crearCategoriaFalla.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
   const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
@@ -107,7 +93,7 @@ export default async function AssetDetailPage({
   return (
     <>
       <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
-      <div className="admin-container" style={{ maxWidth: 640 }}>
+      <div className="admin-container">
         <Link href="/admin" className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -171,6 +157,17 @@ export default async function AssetDetailPage({
           </div>
         </div>
 
+        <p className="section-label">Ficha técnica</p>
+        <div className="admin-panel" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <p className="sub" style={{ margin: 0, maxWidth: 480 }}>
+            La info técnica por sistema (Frenos, Dirección...) que usa el asistente de la app de campo — con o sin
+            manual PDF cargado.
+          </p>
+          <Link href={`/admin/assets/${id}/ficha`} className="btn-outline">
+            Editar ficha técnica
+          </Link>
+        </div>
+
         <p className="section-label">Manuales y documentos</p>
 
         {docsResult.rows.length === 0 ? (
@@ -197,7 +194,7 @@ export default async function AssetDetailPage({
                     </small>
                   </div>
                   <span className="badge">
-                    {doc.source_type === "simulated" ? "Simulado" : DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
+                    {doc.source_type === "simulated" ? "Ficha técnica" : DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
                   </span>
                   <span className={`status-pill ${status.cls}`}>
                     <span className="dot" />
@@ -312,48 +309,6 @@ export default async function AssetDetailPage({
 
             <SubmitButton>Subir documento</SubmitButton>
           </form>
-        </div>
-
-        <div className="admin-panel">
-          <p className="section-label" style={{ marginBottom: 8 }}>Ficha por categoría (sin manual real)</p>
-          <p className="sub" style={{ marginBottom: 18 }}>
-            ¿Todavía no tienes el manual PDF de este activo? Completa la info técnica por sistema — son las mismas
-            categorías que ve el técnico en el Asistente (&quot;Tengo una falla en...&quot;). Cada categoría que
-            llenes se indexa por separado, así el asistente responde con precisión cuando el técnico toca ese tile
-            puntual, sin depender de que Anthropic tenga saldo. Deja en blanco las que no apliquen a este activo.
-          </p>
-          <form action={guardarFichaDeEsteActivo}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 18 }}>
-              {categorias.map((categoria) => (
-                <div key={categoria.slug} className="field" style={{ marginBottom: 0 }}>
-                  <label>{categoria.name}</label>
-                  <textarea
-                    name={`cat_${categoria.slug}`}
-                    rows={4}
-                    defaultValue={fichaActualPorSlug.get(categoria.slug) || ""}
-                    placeholder={`Especificaciones, fallas comunes y procedimientos de ${categoria.name.toLowerCase()} para este activo…`}
-                    style={{
-                      width: "100%",
-                      background: "var(--graphite)",
-                      border: "1.5px solid var(--graphite-line)",
-                      borderRadius: 12,
-                      padding: "12px 14px",
-                      color: "var(--text-hi)",
-                      fontSize: 14,
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <SubmitButton>Guardar ficha</SubmitButton>
-          </form>
-
-          <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--graphite-line)" }}>
-            <NuevaCategoriaForm action={crearCategoriaDeEsteActivo} />
-          </div>
         </div>
 
         <div className="danger-zone">
