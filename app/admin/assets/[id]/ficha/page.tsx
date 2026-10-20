@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { listarCategoriasFalla, listarTiposFicha } from "@/lib/fault-categories";
-import { guardarFichaDeSistema } from "@/app/admin/assets/actions";
+import { listarCategoriasFalla, listarComponentesDeActivo, listarTiposFicha } from "@/lib/fault-categories";
+import { guardarFichaDeSistema, agregarComponenteActivo, quitarComponenteActivo } from "@/app/admin/assets/actions";
 import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { FichaEditor } from "./FichaEditor";
 
@@ -34,8 +34,9 @@ export default async function FichaTecnicaPage({
     );
   }
 
-  const [sistemas, tipos, fichaResult] = await Promise.all([
+  const [catalogoCompleto, componentes, tipos, fichaResult] = await Promise.all([
     listarCategoriasFalla(appUser.tenant_id),
+    listarComponentesDeActivo(appUser.tenant_id, id),
     listarTiposFicha(appUser.tenant_id),
     pool.query(
       `select category_slug, field_type_slug, raw_text from asset_documents
@@ -51,10 +52,16 @@ export default async function FichaTecnicaPage({
     existente[fila.category_slug][fila.field_type_slug] = fila.raw_text || "";
   }
 
+  const slugsActivos = new Set(componentes.map((c) => c.slug));
+  const catalogoDisponible = catalogoCompleto.filter((c) => !slugsActivos.has(c.slug));
+
   const acciones: Record<string, (formData: FormData) => Promise<void>> = {};
-  for (const s of sistemas) {
-    acciones[s.slug] = guardarFichaDeSistema.bind(null, id, s.slug);
+  for (const c of componentes) {
+    acciones[c.slug] = guardarFichaDeSistema.bind(null, id, c.slug);
   }
+
+  const agregarComponente = agregarComponenteActivo.bind(null, id);
+  const quitarComponente = quitarComponenteActivo.bind(null, id);
 
   return (
     <>
@@ -71,16 +78,25 @@ export default async function FichaTecnicaPage({
           <div>
             <h1>Ficha técnica</h1>
             <p className="sub">
-              {asset.name} · {asset.tag_code} — completa cada sistema por separado. El asistente de la app de campo
-              usa esta info directamente cuando el técnico toca ese sistema, con o sin manual PDF cargado.
+              {asset.name} · {asset.tag_code} — los componentes de este activo y su información técnica. El
+              Asistente de la app de campo usa esta información al diagnosticar, con o sin manual PDF cargado.
             </p>
           </div>
           <Link href="/admin/categorias" className="btn-outline">
-            Gestionar categorías
+            Catálogo de categorías
           </Link>
         </div>
 
-        <FichaEditor sistemas={sistemas} tipos={tipos} existente={existente} acciones={acciones} sistemaInicial={sistemaInicial} />
+        <FichaEditor
+          componentes={componentes}
+          catalogoDisponible={catalogoDisponible}
+          tipos={tipos}
+          existente={existente}
+          acciones={acciones}
+          agregarComponente={agregarComponente}
+          quitarComponente={quitarComponente}
+          sistemaInicial={sistemaInicial}
+        />
       </div>
     </>
   );

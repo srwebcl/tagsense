@@ -98,14 +98,23 @@
   position:sticky; top:84px;
 }
 .ficha-sidebar-item{
-  display:flex; align-items:center; justify-content:space-between; gap:8px;
-  padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer;
-  font-size:13px; font-weight:600; color:var(--text-mid); text-align:left; width:100%;
-  transition:background .15s ease, color .15s ease;
+  display:flex; align-items:center; gap:2px; border-radius:10px;
+  transition:background .15s ease, color .15s ease; color:var(--text-mid);
 }
 .ficha-sidebar-item:hover{ background:rgba(255,255,255,0.04); color:var(--text-hi); }
 .ficha-sidebar-item.active{ background:rgba(208,120,56,0.14); color:var(--copper-2); }
+.ficha-sidebar-item-btn{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex:1; min-width:0;
+  padding:10px 0 10px 12px; border:none; background:none; cursor:pointer;
+  font-size:13px; font-weight:600; color:inherit; text-align:left;
+}
 .ficha-sidebar-item .dot-lleno{ width:7px; height:7px; border-radius:50%; background:var(--ok); flex-shrink:0; }
+.ficha-sidebar-quitar{
+  flex-shrink:0; width:26px; height:26px; margin-right:6px; border-radius:7px; border:none;
+  background:none; color:var(--text-low); font-size:16px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.ficha-sidebar-quitar:hover{ background:rgba(201,18,51,0.15); color:var(--err); }
 .ficha-content{ flex:1; min-width:0; }
 .ficha-field-group{ margin-bottom:18px; }
 .ficha-field-group label{
@@ -117,9 +126,9 @@
   .ficha-layout{ flex-direction:column; }
   .ficha-sidebar{
     flex-direction:row; width:100%; overflow-x:auto; position:static;
-    gap:6px;
+    gap:6px; flex-wrap:nowrap;
   }
-  .ficha-sidebar-item{ width:auto; flex-shrink:0; white-space:nowrap; }
+  .ficha-sidebar-item{ flex-shrink:0; white-space:nowrap; }
 }
 
 /* ===== Login (reutiliza el look del login de campo) ===== */

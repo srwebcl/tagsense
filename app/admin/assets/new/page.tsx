@@ -6,12 +6,14 @@ import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 import { AssetTypeSelect } from "@/app/admin/_components/AssetTypeSelect";
+import { sugerirSiguienteTagCode } from "@/lib/tag-code";
 
 export default async function NewAssetPage() {
   const appUser = await requireAdmin();
 
   const typesResult = await pool.query(`select name from asset_types where tenant_id = $1 order by name`, [appUser.tenant_id]);
   const tipoOptions = typesResult.rows.map((r) => r.name);
+  const tagCodeSugerido = await sugerirSiguienteTagCode(appUser.tenant_id);
 
   return (
     <>
@@ -41,8 +43,11 @@ export default async function NewAssetPage() {
                   <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6" />
                   <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6" />
                 </svg>
-                <input name="tag_code" required placeholder="TS-CAEX-0000126" />
+                <input name="tag_code" required defaultValue={tagCodeSugerido} />
               </div>
+              <small style={{ display: "block", marginTop: 6, color: "var(--text-mid)" }}>
+                Se sugiere en base al correlativo de activos existentes — edítalo si corresponde otro.
+              </small>
             </div>
 
             <div className="field">

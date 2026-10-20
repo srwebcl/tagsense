@@ -51,3 +51,24 @@ export async function crearTipoFicha(formData: FormData) {
   revalidatePath("/admin/categorias");
   redirect("/admin/categorias");
 }
+
+// Catálogo de tipos de activo (Camión articulado, Pala cargadora...) — ya
+// existía (crece también desde el formulario de crear/editar activo, ver
+// AssetTypeSelect), se agrega acá para tener un solo lugar donde ver y
+// administrar los tres catálogos del sistema.
+export async function crearTipoDeActivo(formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const nombre = String(formData.get("nombre_tipo_activo") || "").trim();
+  if (!nombre) {
+    throw new Error("Falta el nombre del tipo de activo.");
+  }
+
+  await pool.query(
+    `insert into asset_types (tenant_id, name) values ($1, $2) on conflict (tenant_id, name) do nothing`,
+    [appUser.tenant_id, nombre]
+  );
+
+  revalidatePath("/admin/categorias");
+  redirect("/admin/categorias");
+}

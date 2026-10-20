@@ -24,6 +24,23 @@ export async function listarTiposFicha(tenantId: string): Promise<FichaFieldType
   return result.rows;
 }
 
+// Componentes ACTIVOS para un activo en particular — un camión tiene tolva,
+// una bomba no; una pala tiene balde, un camión no. fault_categories sigue
+// siendo el catálogo de opciones disponibles para elegir o crear; esta
+// consulta es la que realmente arma el sidebar de la ficha técnica y los
+// tiles del Asistente de campo para ESE activo puntual.
+export async function listarComponentesDeActivo(tenantId: string, assetId: string): Promise<FaultCategory[]> {
+  const result = await pool.query<FaultCategory>(
+    `select fc.slug, fc.name
+     from asset_components ac
+     join fault_categories fc on fc.tenant_id = ac.tenant_id and fc.slug = ac.category_slug
+     where ac.tenant_id = $1 and ac.asset_id = $2
+     order by ac.created_at asc`,
+    [tenantId, assetId]
+  );
+  return result.rows;
+}
+
 // El admin escribe el nombre ("Neumáticos") y se deriva un slug estable para
 // guardar/matchear (sin tildes, minúsculas, guiones) — mismo criterio simple
 // que ya usa el resto del proyecto para tag_code/ids legibles.

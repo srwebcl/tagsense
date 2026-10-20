@@ -248,19 +248,24 @@ const SYMPTOM_ICONS = {
 const ICONO_GENERICO = '<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4L14.7 6.3Z" stroke="#c91233" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 
 const symptomGridItems = document.getElementById('symptom-grid-items');
-let categoriasFallaCargadas = false;
+// Los componentes son por activo (un camión tiene tolva, una bomba no — ver
+// asset_components) — hay que recargar los tiles si el técnico escanea un
+// activo distinto dentro de la misma sesión, no solo la primera vez.
+let categoriasFallaDeActivoId = null;
 
 async function cargarCategoriasFalla(){
-  if (categoriasFallaCargadas || !symptomGridItems) return;
+  if (!symptomGridItems || !activoActualId || categoriasFallaDeActivoId === activoActualId) return;
+  const activo = ACTIVOS[activoActualId];
+  if (!activo || !activo.id) return;
   try {
-    const resp = await fetch('/api/fault-categories');
+    const resp = await fetch('/api/fault-categories?asset_id=' + encodeURIComponent(activo.id));
     if (!resp.ok) return;
     const data = await resp.json().catch(() => null);
     const categorias = (data && data.categorias) || [];
+    symptomGridItems.innerHTML = '';
+    categoriasFallaDeActivoId = activoActualId;
     if (categorias.length === 0) return;
 
-    categoriasFallaCargadas = true;
-    symptomGridItems.innerHTML = '';
     categorias.forEach(categoria => {
       const tile = document.createElement('div');
       tile.className = 'symptom-tile';

@@ -9,7 +9,7 @@ import { pool } from "@/lib/db";
 import { uploads } from "@/lib/storage";
 import { indexDocument, indexSimulatedText } from "@/lib/indexing";
 import { detectImageKind, isPdf } from "@/lib/file-validation";
-import { listarTiposFicha } from "@/lib/fault-categories";
+import { listarTiposFicha, slugificar } from "@/lib/fault-categories";
 
 function parseYear(raw: FormDataEntryValue | null): number | null {
   const n = parseInt(String(raw || "").trim(), 10);
@@ -385,6 +385,66 @@ export async function reindexarDocumento(assetId: string, documentId: string) {
   }
   revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
+}
+
+// Activa un componente (sistema) para ESTE activo en particular — no todos
+// los activos tienen los mismos: un camión tiene tolva, una bomba no. Si el
+// admin elige uno existente del catálogo, se activa directo; si escribe uno
+// nuevo, primero se agrega al catálogo compartido (fault_categories) y
+// después se activa solo para este activo.
+export async function agregarComponenteActivo(assetId: string, formData: FormData) {
+  const appUser = await requireAdmin();
+
+  const assetResult = await pool.query(`select id from assets where tenant_id = $1 and id = $2 limit 1`, [appUser.tenant_id, assetId]);
+  if (!assetResult.rows[0]) {
+    throw new Error("Activo no encontrado.");
+  }
+
+  const existente = String(formData.get("componente_existente") || "").trim();
+  const nuevo = String(formData.get("componente_nuevo") || "").trim();
+
+  let slug: string;
+  if (nuevo) {
+    slug = slugificar(nuevo);
+    if (!slug) throw new Error("El nombre del componente no es válido.");
+    await pool.query(
+      `insert into fault_categories (tenant_id, slug, name) values ($1, $2, $3) on conflict (tenant_id, slug) do nothing`,
+      [appUser.tenant_id, slug, nuevo]
+    );
+  } else if (existente) {
+    slug = existente;
+  } else {
+    throw new Error("Elige un componente del catálogo o escribe uno nuevo.");
+  }
+
+  await pool.query(
+    `insert into asset_components (tenant_id, asset_id, category_slug) values ($1, $2, $3) on conflict (asset_id, category_slug) do nothing`,
+    [appUser.tenant_id, assetId, slug]
+  );
+
+  revalidatePath(`/admin/assets/${assetId}/ficha`);
+  redirect(`/admin/assets/${assetId}/ficha?sistema=${slug}`);
+}
+
+// Quita un componente de ESTE activo (no lo borra del catálogo compartido,
+// otros activos pueden seguir usándolo) y de paso borra la ficha técnica que
+// tuviera cargada para ese componente en este activo — no tiene sentido
+// dejarla guardada pero invisible.
+export async function quitarComponenteActivo(assetId: string, categorySlug: string) {
+  const appUser = await requireAdmin();
+
+  await pool.query(`delete from asset_components where tenant_id = $1 and asset_id = $2 and category_slug = $3`, [
+    appUser.tenant_id,
+    assetId,
+    categorySlug,
+  ]);
+  await pool.query(
+    `delete from asset_documents where tenant_id = $1 and asset_id = $2 and category_slug = $3 and source_type = 'simulated'`,
+    [appUser.tenant_id, assetId, categorySlug]
+  );
+
+  revalidatePath(`/admin/assets/${assetId}/ficha`);
+  redirect(`/admin/assets/${assetId}/ficha`);
 }
 
 export async function resolverSolicitudAdmin(assetId: string, requestId: string) {
