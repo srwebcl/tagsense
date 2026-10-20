@@ -48,8 +48,8 @@ export default async function CategoriasPage() {
 
         <p className="section-label" style={{ marginBottom: 6 }}>Sistemas por tipo de activo</p>
         <p className="sub" style={{ marginBottom: 16 }}>
-          Define qué sistemas trae un activo nuevo según su tipo. Los activos existentes no cambian; se editan desde
-          su propia ficha técnica.
+          Define qué sistemas trae un activo nuevo según su tipo. Se guarda al marcar o desmarcar. Los activos
+          existentes no cambian; se editan desde su propia ficha técnica.
         </p>
         <div className="admin-panel" style={{ marginBottom: 24 }}>
           <PlantillaPorTipo tiposActivo={tiposActivo} sistemas={sistemas} plantillas={plantillas} action={alternarComponenteDeTipo} />
