@@ -5,15 +5,13 @@ import {
   subirDocumento,
   reindexarDocumento,
   eliminarActivo,
-  subirFotoActivo,
   resolverSolicitudAdmin,
 } from "@/app/admin/assets/actions";
 import { uploads } from "@/lib/storage";
-import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
-import { SubmitButton } from "@/app/admin/_components/SubmitButton";
-import { FileDropzone } from "@/app/admin/_components/FileDropzone";
+import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
 import { CopyTagLinkButton } from "@/app/admin/_components/CopyTagLinkButton";
+import { UploadDocumentCard } from "./UploadDocumentCard";
 
 const STATUS_LABEL: Record<string, string> = {
   operativo: "Operativo",
@@ -62,12 +60,11 @@ export default async function AssetDetailPage({
 
   if (!asset) {
     return (
-      <>
-        <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
+      <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
         <div className="admin-container">
           <div className="admin-empty">Activo no encontrado.</div>
         </div>
-      </>
+      </AdminShell>
     );
   }
 
@@ -86,14 +83,12 @@ export default async function AssetDetailPage({
   const subirDocumentoDeEsteActivo = subirDocumento.bind(null, id);
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
-  const subirFotoDeEsteActivo = subirFotoActivo.bind(null, id);
   const resolverSolicitudDeEsteActivo = resolverSolicitudAdmin.bind(null, id);
   const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
 
   return (
-    <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
-      <div className="admin-container">
+    <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
+      <div className="admin-container admin-container-wide">
         <Link href="/admin" className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,193 +116,159 @@ export default async function AssetDetailPage({
               </p>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
             <span className={`status-pill ${STATUS_CLASS[asset.status] || "warn"}`}>
               <span className="dot" />
               {STATUS_LABEL[asset.status] || asset.status}
             </span>
+            <Link href={`/admin/assets/${id}/ficha`} className="btn-outline">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9l-6-6Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M9 3v6h6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+              Ficha técnica
+            </Link>
             <Link href={`/admin/assets/${id}/edit`} className="btn-outline">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
               </svg>
-              Editar
+              Editar activo
             </Link>
           </div>
         </div>
 
-        <p className="section-label">Código QR del tag</p>
-        <div className="admin-panel qr-panel">
-          <img src={`/api/assets/${asset.tag_code}/qrcode`} alt={`QR de ${asset.tag_code}`} width={160} height={160} className="qr-preview" />
-          <div className="qr-panel-info">
-            <p className="qr-panel-code">{asset.tag_code}</p>
-            <p className="qr-panel-hint">
-              Se genera a partir del código del tag. Imprímelo y pégalo en el equipo; cualquier cámara lo reconoce, y
-              si el celular no tiene la app igual abre la ficha en el navegador. El link de abajo es el que hay que
-              grabar en el chip NFC del tag físico, si el equipo tiene uno.
-            </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Descargar QR
-              </a>
+        <div className="admin-section">
+          <p className="section-label">Código QR del tag</p>
+          <div className="admin-panel qr-panel">
+            <img src={`/api/assets/${asset.tag_code}/qrcode`} alt={`QR de ${asset.tag_code}`} width={160} height={160} className="qr-preview" />
+            <div className="qr-panel-info">
+              <p className="qr-panel-code">{asset.tag_code}</p>
+              <p className="qr-panel-hint">
+                Código único asignado a este equipo. Escanea el código QR o vincula el enlace directo en el TAG físico para acceder a su ficha técnica en terreno.
+              </p>
               <CopyTagLinkButton tagCode={asset.tag_code} />
+              <div style={{ marginTop: 12 }}>
+                <a href={`/api/assets/${asset.tag_code}/qrcode?download=1`} className="btn-outline" download={`qr-${asset.tag_code}.png`}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Descargar QR (PNG)
+                </a>
+              </div>
             </div>
           </div>
         </div>
 
-        <p className="section-label">Ficha técnica</p>
-        <div className="admin-panel" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <p className="sub" style={{ margin: 0, maxWidth: 480 }}>
-            Información técnica por sistema que usa el asistente de la app de campo, con o sin manual PDF cargado.
-          </p>
-          <Link href={`/admin/assets/${id}/ficha`} className="btn-outline">
-            Editar ficha técnica
-          </Link>
+        <div className="admin-section">
+          <p className="section-label">Ficha técnica</p>
+          <div className="admin-panel" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 14.5, fontWeight: 700, color: "var(--text-hi)" }}>
+                Parámetros y sistemas del equipo
+              </h3>
+              <p className="sub" style={{ margin: 0, maxWidth: 520 }}>
+                Información técnica, procedimientos y fallas por sistema que utiliza el asistente técnico en terreno.
+              </p>
+            </div>
+            <Link href={`/admin/assets/${id}/ficha`} className="btn-outline">
+              Abrir ficha técnica
+            </Link>
+          </div>
         </div>
 
-        <p className="section-label">Manuales y documentos</p>
+        <div className="admin-section">
+          <p className="section-label">Manuales y documentos</p>
 
-        {docsResult.rows.length === 0 ? (
-          <div className="admin-empty" style={{ marginBottom: 24 }}>
-            Todavía no hay documentos cargados para este activo.
-          </div>
-        ) : (
-          <div className="doc-list">
-            {docsResult.rows.map((doc) => {
-              const status = INDEX_STATUS[doc.index_status] || INDEX_STATUS.pending;
-              return (
-                <div key={doc.id} className="doc-row">
-                  <div className="ic">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path d="M7 3h7l5 5v13H7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                      <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                    </svg>
+          {docsResult.rows.length === 0 ? (
+            <div className="admin-empty" style={{ marginBottom: 16 }}>
+              Todavía no hay documentos cargados para este activo.
+            </div>
+          ) : (
+            <div className="doc-list">
+              {docsResult.rows.map((doc) => {
+                const status = INDEX_STATUS[doc.index_status] || INDEX_STATUS.pending;
+                return (
+                  <div key={doc.id} className="doc-row">
+                    <div className="ic">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 3h7l5 5v13H7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                        <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div className="txt">
+                      <strong>{doc.title}</strong>
+                      <small>
+                        {new Date(doc.created_at).toLocaleDateString("es-CL")}
+                        {doc.index_status === "failed" && doc.index_error ? ` · ${doc.index_error}` : ""}
+                      </small>
+                    </div>
+                    <span className="badge">
+                      {doc.source_type === "simulated" ? "Ficha técnica" : DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
+                    </span>
+                    <span className={`status-pill ${status.cls}`}>
+                      <span className="dot" />
+                      {status.label}
+                    </span>
+                    {doc.index_status !== "indexed" && doc.index_status !== "processing" && (
+                      <form action={reindexarDeEsteActivo.bind(null, doc.id)}>
+                        <button type="submit" className="doc-reindex-btn" title="Reintentar indexado">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      </form>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          )}
+
+          <UploadDocumentCard action={subirDocumentoDeEsteActivo} hasDocuments={docsResult.rows.length > 0} />
+        </div>
+
+        <div className="admin-section">
+          <p className="section-label">Solicitudes de mantenimiento</p>
+
+          {solicitudesResult.rows.length === 0 ? (
+            <div className="admin-empty" style={{ marginBottom: 24 }}>
+              Todavía no se han generado solicitudes desde los informes de campo.
+            </div>
+          ) : (
+            <div className="doc-list" style={{ marginBottom: 24 }}>
+              {solicitudesResult.rows.map((sm) => (
+                <div key={sm.id} className="doc-row">
                   <div className="txt">
-                    <strong>{doc.title}</strong>
+                    <strong>
+                      {sm.folio} · {sm.tipo}
+                    </strong>
                     <small>
-                      {new Date(doc.created_at).toLocaleDateString("es-CL")}
-                      {doc.index_status === "failed" && doc.index_error ? ` · ${doc.index_error}` : ""}
+                      {new Date(sm.created_at).toLocaleDateString("es-CL")}
+                      {sm.descripcion ? ` · ${sm.descripcion}` : ""}
                     </small>
                   </div>
-                  <span className="badge">
-                    {doc.source_type === "simulated" ? "Ficha técnica" : DOC_TYPE_LABEL[doc.document_type] || doc.document_type}
-                  </span>
-                  <span className={`status-pill ${status.cls}`}>
+                  <span className={`status-pill ${PRIORIDAD_CLASS[sm.prioridad] || "warn"}`}>
                     <span className="dot" />
-                    {status.label}
+                    {sm.prioridad}
                   </span>
-                  {doc.index_status !== "indexed" && doc.index_status !== "processing" && (
-                    <form action={reindexarDeEsteActivo.bind(null, doc.id)}>
-                      <button type="submit" className="doc-reindex-btn" title="Reintentar indexado">
+                  <span className={`status-pill ${sm.estado === "Resuelta" ? "ok" : "warn"}`}>
+                    <span className="dot" />
+                    {sm.estado}
+                  </span>
+                  {sm.estado === "Abierta" && (
+                    <form action={resolverSolicitudDeEsteActivo.bind(null, sm.id)}>
+                      <button type="submit" className="doc-reindex-btn" title="Marcar como resuelta">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                          <path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                     </form>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        <p className="index-note">
-          Los documentos se indexan solos al subirlos (texto → embeddings con Voyage AI) para que el asistente
-          pueda buscarlos. Puede tardar unos segundos; si queda en &quot;Falló&quot;, probablemente el PDF es un
-          escaneo sin texto real (necesitaría OCR, no soportado todavía).
-        </p>
-
-        <p className="section-label">Solicitudes de mantenimiento</p>
-
-        {solicitudesResult.rows.length === 0 ? (
-          <div className="admin-empty" style={{ marginBottom: 24 }}>
-            Todavía no se han generado solicitudes desde los informes de campo.
-          </div>
-        ) : (
-          <div className="doc-list" style={{ marginBottom: 24 }}>
-            {solicitudesResult.rows.map((sm) => (
-              <div key={sm.id} className="doc-row">
-                <div className="txt">
-                  <strong>
-                    {sm.folio} · {sm.tipo}
-                  </strong>
-                  <small>
-                    {new Date(sm.created_at).toLocaleDateString("es-CL")}
-                    {sm.descripcion ? ` · ${sm.descripcion}` : ""}
-                  </small>
-                </div>
-                <span className={`status-pill ${PRIORIDAD_CLASS[sm.prioridad] || "warn"}`}>
-                  <span className="dot" />
-                  {sm.prioridad}
-                </span>
-                <span className={`status-pill ${sm.estado === "Resuelta" ? "ok" : "warn"}`}>
-                  <span className="dot" />
-                  {sm.estado}
-                </span>
-                {sm.estado === "Abierta" && (
-                  <form action={resolverSolicitudDeEsteActivo.bind(null, sm.id)}>
-                    <button type="submit" className="doc-reindex-btn" title="Marcar como resuelta">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  </form>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="admin-panel">
-          <p className="section-label" style={{ marginBottom: 18 }}>{photoUrl ? "Cambiar foto" : "Foto principal"}</p>
-          <form action={subirFotoDeEsteActivo}>
-            <div className="field">
-              <FileDropzone
-                name="photo"
-                accept="image/*"
-                label={photoUrl ? "Elegir nueva foto" : "Elegir foto del activo"}
-                hint="Se muestra en la ficha de la app de campo."
-              />
+              ))}
             </div>
-            <SubmitButton>{photoUrl ? "Reemplazar foto" : "Subir foto"}</SubmitButton>
-          </form>
-        </div>
-
-        <div className="admin-panel">
-          <p className="section-label" style={{ marginBottom: 18 }}>Subir documento</p>
-          <form action={subirDocumentoDeEsteActivo}>
-            <div className="field">
-              <label>Título <span className="req">*</span></label>
-              <div className="input-wrap">
-                <input name="title" required placeholder="Manual de operación MT65S" />
-              </div>
-            </div>
-
-            <div className="field">
-              <label>Tipo de documento</label>
-              <div className="chip-group">
-                <input type="radio" name="document_type" id="dt-op" value="operacion" defaultChecked />
-                <label htmlFor="dt-op">Operación</label>
-                <input type="radio" name="document_type" id="dt-sv" value="servicio" />
-                <label htmlFor="dt-sv">Servicio</label>
-                <input type="radio" name="document_type" id="dt-rp" value="reparacion" />
-                <label htmlFor="dt-rp">Reparación</label>
-                <input type="radio" name="document_type" id="dt-pt" value="partes" />
-                <label htmlFor="dt-pt">Partes</label>
-              </div>
-            </div>
-
-            <div className="field">
-              <label>Archivo (PDF) <span className="req">*</span></label>
-              <FileDropzone name="file" accept="application/pdf" />
-            </div>
-
-            <SubmitButton>Subir documento</SubmitButton>
-          </form>
+          )}
         </div>
 
         <div className="danger-zone">
@@ -315,6 +276,6 @@ export default async function AssetDetailPage({
           <DeleteAssetButton assetName={asset.name} action={eliminarEsteActivo} />
         </div>
       </div>
-    </>
+    </AdminShell>
   );
 }

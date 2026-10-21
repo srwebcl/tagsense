@@ -94,7 +94,6 @@ export function goTo(id){
     // competía con ese contenido. En las pantallas de abajo sí aporta, porque
     // son listas/sub-secciones sin esa acción ya disponible en línea.
     const EQUIPMENT_CONTEXT_STEPS = [
-      'step-asistente',
       'step-historial', 'step-documentos', 'step-repuestos', 'step-doc-reader',
       'step-instructivos', 'step-solicitudes'
     ];

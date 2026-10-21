@@ -24,15 +24,20 @@ export type AppUser = {
 // misma persona pertenezca a más de un tenant, esto requiere un selector de
 // tenant explícito en el login — no basta con relajar la constraint.
 export async function getCurrentAppUser(): Promise<AppUser | null> {
-  const { data: session } = await auth.getSession();
-  if (!session?.user?.email) return null;
+  try {
+    const { data: session } = await auth.getSession();
+    if (!session?.user?.email) return null;
 
-  const result = await pool.query<AppUser>(
-    `select id, tenant_id, role, full_name, email
-     from users
-     where email = $1
-     limit 1`,
-    [session.user.email]
-  );
-  return result.rows[0] ?? null;
+    const result = await pool.query<AppUser>(
+      `select id, tenant_id, role, full_name, email
+       from users
+       where email = $1
+       limit 1`,
+      [session.user.email]
+    );
+    return result.rows[0] ?? null;
+  } catch (err) {
+    console.error("[getCurrentAppUser] Error obteniendo usuario autenticado:", err);
+    return null;
+  }
 }

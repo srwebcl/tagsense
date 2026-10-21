@@ -22,7 +22,10 @@ export const GET = withErrorLogging("assets/:tag_code/qrcode", async (
     return Response.json({ error: { code: "not_found", message: "Activo no encontrado." } }, { status: 404 });
   }
 
-  const origin = new URL(request.url).origin;
+  const appUrl = process.env.APP_URL?.replace(/\/$/, "");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  const origin = appUrl || (forwardedHost ? `${forwardedProto}://${forwardedHost}` : new URL(request.url).origin);
   const targetUrl = `${origin}/index.html?activo=${encodeURIComponent(asset.tag_code)}`;
 
   const png = await QRCode.toBuffer(targetUrl, {

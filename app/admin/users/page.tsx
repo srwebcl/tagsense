@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
+import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { RoleSelect } from "@/app/admin/_components/RoleSelect";
 import { RevokeAccessButton } from "@/app/admin/_components/RevokeAccessButton";
-import { ResetPasswordButton } from "@/app/admin/_components/ResetPasswordButton";
-import { cambiarRolUsuario, quitarAccesoUsuario, resetearContrasenaUsuario } from "./actions";
+import { ChangePasswordButton } from "@/app/admin/_components/ChangePasswordButton";
+import { cambiarRolUsuario, quitarAccesoUsuario, cambiarContrasenaUsuario } from "./actions";
 import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/roles";
 
 export default async function UsersPage() {
@@ -17,16 +17,8 @@ export default async function UsersPage() {
   );
 
   return (
-    <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
-      <div className="admin-container" style={{ maxWidth: 720 }}>
-        <Link href="/admin" className="link-back">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Activos
-        </Link>
-
+    <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
+      <div className="admin-container" style={{ maxWidth: 840 }}>
         <div className="admin-page-head">
           <div>
             <h1>Usuarios</h1>
@@ -65,7 +57,13 @@ export default async function UsersPage() {
                   <RoleSelect userId={u.id} rolActual={u.role} action={cambiarRolUsuario} />
                 )}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-                  <ResetPasswordButton userId={u.id} userName={u.full_name || u.email} action={resetearContrasenaUsuario} />
+                  <ChangePasswordButton
+                    userId={u.id}
+                    userName={u.full_name || u.email}
+                    userEmail={u.email}
+                    isSelf={esUnoMismo}
+                    action={cambiarContrasenaUsuario}
+                  />
                   {!esUnoMismo && <RevokeAccessButton userName={u.full_name || u.email} action={quitarAccesoDeEsteUsuario} />}
                 </div>
               </div>
@@ -73,6 +71,6 @@ export default async function UsersPage() {
           })}
         </div>
       </div>
-    </>
+    </AdminShell>
   );
 }

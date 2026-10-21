@@ -213,10 +213,10 @@ export async function subirFotoActivo(assetId: string, formData: FormData) {
   }
 
   await guardarFotoActivo(appUser.tenant_id, assetId, photo);
-  // Sin esto, la foto recién subida no se veía hasta recargar la página a
-  // mano — la ficha del activo ya estaba en la caché del router desde antes.
+  const returnTo = String(formData.get("return_to") || `/admin/assets/${assetId}`);
   revalidatePath(`/admin/assets/${assetId}`);
-  redirect(`/admin/assets/${assetId}`);
+  revalidatePath(`/admin/assets/${assetId}/ficha`);
+  redirect(returnTo);
 }
 
 export async function eliminarActivo(assetId: string) {
@@ -230,23 +230,23 @@ export async function eliminarActivo(assetId: string) {
     throw new Error("Activo no encontrado.");
   }
 
-  // Borra los archivos del bucket (documentos y foto) antes de la fila — si se
-  // hiciera al revés y fallara el borrado del bucket, quedaría un activo
-  // "fantasma" sin archivos.
+  // Borra los archivos del bucket (documentos y foto) antes de la fila
   const prefixes = [`documents/${appUser.tenant_id}/${assetId}/`, `asset-photos/${appUser.tenant_id}/${assetId}/`];
   for (const prefix of prefixes) {
-    const listed = await uploads.list({ prefix });
-    await Promise.all(listed.items.map((f) => uploads.delete(f.key)));
+    try {
+      const listed = await uploads.list({ prefix });
+      await Promise.all(listed.items.map((f) => uploads.delete(f.key)));
+    } catch (e) {
+      console.warn(`[storage] Error al limpiar ${prefix}:`, e);
+    }
   }
 
-  // interventions, asset_documents (y en cascada intervention_photos, reports,
-  // document_chunks) se borran solos — ver "on delete cascade" en 0001_init_schema.sql.
+  // interventions, asset_documents, ai_conversations (on delete cascade) se borran solos
   await pool.query(`delete from assets where tenant_id = $1 and id = $2`, [appUser.tenant_id, assetId]);
 
-  // Sin esto, el activo borrado seguía apareciendo en el listado hasta
-  // recargar la página a mano.
   revalidatePath("/admin");
-  redirect("/admin");
+  revalidatePath(`/admin/assets/${assetId}`);
+  return { success: true };
 }
 
 export async function subirDocumento(assetId: string, formData: FormData) {
@@ -457,7 +457,7 @@ export async function quitarComponenteActivo(assetId: string, categorySlug: stri
   );
 
   revalidatePath(`/admin/assets/${assetId}/ficha`);
-  redirect(`/admin/assets/${assetId}/ficha`);
+  return { success: true };
 }
 
 export async function resolverSolicitudAdmin(assetId: string, requestId: string) {

@@ -108,9 +108,35 @@ export async function eliminarCategoriaFalla(slug: string) {
   revalidatePath("/admin/categorias");
 }
 
+export async function editarCategoriaFalla(slug: string, nuevoNombre: string) {
+  const appUser = await requireAdmin();
+  const nombre = nuevoNombre.trim();
+  if (!nombre) {
+    throw new Error("El nombre no puede estar vacío.");
+  }
+  await pool.query(
+    `update fault_categories set name = $3 where tenant_id = $1 and slug = $2`,
+    [appUser.tenant_id, slug, nombre]
+  );
+  revalidatePath("/admin/categorias");
+}
+
 export async function eliminarTipoFicha(slug: string) {
   const appUser = await requireAdmin();
   await pool.query(`delete from ficha_field_types where tenant_id = $1 and slug = $2`, [appUser.tenant_id, slug]);
+  revalidatePath("/admin/categorias");
+}
+
+export async function editarTipoFicha(slug: string, nuevoNombre: string) {
+  const appUser = await requireAdmin();
+  const nombre = nuevoNombre.trim();
+  if (!nombre) {
+    throw new Error("El nombre no puede estar vacío.");
+  }
+  await pool.query(
+    `update ficha_field_types set name = $3 where tenant_id = $1 and slug = $2`,
+    [appUser.tenant_id, slug, nombre]
+  );
   revalidatePath("/admin/categorias");
 }
 
@@ -120,3 +146,42 @@ export async function eliminarTipoDeActivo(nombre: string) {
   await pool.query(`delete from asset_type_components where tenant_id = $1 and asset_type = $2`, [appUser.tenant_id, nombre]);
   revalidatePath("/admin/categorias");
 }
+
+export async function editarTipoDeActivo(nombreActual: string, nuevoNombre: string) {
+  const appUser = await requireAdmin();
+  const nuevo = nuevoNombre.trim();
+  if (!nuevo) {
+    throw new Error("El nombre del tipo no puede estar vacío.");
+  }
+  if (nuevo === nombreActual) return;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `insert into asset_types (tenant_id, name) values ($1, $2) on conflict (tenant_id, name) do nothing`,
+      [appUser.tenant_id, nuevo]
+    );
+    await client.query(
+      `update assets set asset_type = $3 where tenant_id = $1 and asset_type = $2`,
+      [appUser.tenant_id, nombreActual, nuevo]
+    );
+    await client.query(
+      `update asset_type_components set asset_type = $3 where tenant_id = $1 and asset_type = $2`,
+      [appUser.tenant_id, nombreActual, nuevo]
+    );
+    await client.query(
+      `delete from asset_types where tenant_id = $1 and name = $2`,
+      [appUser.tenant_id, nombreActual]
+    );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+  revalidatePath("/admin/categorias");
+  revalidatePath("/admin");
+}
+

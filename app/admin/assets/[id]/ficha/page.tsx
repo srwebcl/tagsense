@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { listarCategoriasFalla, listarComponentesDeActivo, listarTiposFicha } from "@/lib/fault-categories";
-import { guardarFichaDeSistema, agregarComponenteActivo, quitarComponenteActivo } from "@/app/admin/assets/actions";
-import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
+import { uploads } from "@/lib/storage";
+import { guardarFichaDeSistema, agregarComponenteActivo, quitarComponenteActivo, subirFotoActivo } from "@/app/admin/assets/actions";
+import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { FichaEditor } from "./FichaEditor";
 
 export default async function FichaTecnicaPage({
@@ -18,19 +19,18 @@ export default async function FichaTecnicaPage({
   const { sistema: sistemaInicial } = await searchParams;
 
   const assetResult = await pool.query(
-    `select id, tag_code, name from assets where tenant_id = $1 and id = $2 limit 1`,
+    `select id, tag_code, name, photo_url from assets where tenant_id = $1 and id = $2 limit 1`,
     [appUser.tenant_id, id]
   );
   const asset = assetResult.rows[0];
 
   if (!asset) {
     return (
-      <>
-        <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
+      <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
         <div className="admin-container">
           <div className="admin-empty">Activo no encontrado.</div>
         </div>
-      </>
+      </AdminShell>
     );
   }
 
@@ -62,10 +62,11 @@ export default async function FichaTecnicaPage({
 
   const agregarComponente = agregarComponenteActivo.bind(null, id);
   const quitarComponente = quitarComponenteActivo.bind(null, id);
+  const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
+  const subirFotoAction = subirFotoActivo.bind(null, id);
 
   return (
-    <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
+    <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
       <div className="admin-container admin-container-wide">
         <Link href={`/admin/assets/${id}`} className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -78,8 +79,8 @@ export default async function FichaTecnicaPage({
           <div>
             <h1>Ficha técnica</h1>
             <p className="sub">
-              {asset.name} · {asset.tag_code}. Componentes de este activo e información técnica que usa el
-              Asistente de la app de campo al diagnosticar, con o sin manual PDF cargado.
+              {asset.name} · {asset.tag_code}. Fotografía del equipo y especificaciones por sistema que utiliza el
+              Asistente en terreno.
             </p>
           </div>
           <Link href="/admin/categorias" className="btn-outline">
@@ -88,6 +89,9 @@ export default async function FichaTecnicaPage({
         </div>
 
         <FichaEditor
+          assetId={id}
+          photoUrl={photoUrl}
+          subirFotoAction={subirFotoAction}
           componentes={componentes}
           catalogoDisponible={catalogoDisponible}
           tipos={tipos}
@@ -98,6 +102,6 @@ export default async function FichaTecnicaPage({
           sistemaInicial={sistemaInicial}
         />
       </div>
-    </>
+    </AdminShell>
   );
 }

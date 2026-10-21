@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { crearActivo } from "@/app/admin/assets/actions";
-import { AdminTopbar } from "@/app/admin/_components/AdminTopbar";
+import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
 import { FileDropzone } from "@/app/admin/_components/FileDropzone";
 import { AssetTypeSelect } from "@/app/admin/_components/AssetTypeSelect";
@@ -16,9 +16,8 @@ export default async function NewAssetPage() {
   const tagCodeSugerido = await sugerirSiguienteTagCode(appUser.tenant_id);
 
   return (
-    <>
-      <AdminTopbar userName={appUser.full_name || appUser.email} userRole={appUser.role} />
-      <div className="admin-container" style={{ maxWidth: 560 }}>
+    <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
+      <div className="admin-container" style={{ maxWidth: 640 }}>
         <Link href="/admin" className="link-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -168,6 +167,6 @@ export default async function NewAssetPage() {
           </form>
         </div>
       </div>
-    </>
+    </AdminShell>
   );
 }
