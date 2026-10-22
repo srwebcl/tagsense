@@ -100,6 +100,28 @@ function serializeTags(tags: StructuredTag[]): string {
     .join("\n");
 }
 
+const SUGERENCIAS_TAGS: Record<string, { title: string; defaultDetail: string }[]> = {
+  equipamiento: [
+    { title: "Capacidad fluido", defaultDetail: "Aceite 15W-40 cárter húmedo 36 L" },
+    { title: "Presión de trabajo", defaultDetail: "250 bar (25 MPa)" },
+    { title: "Tipo lubricante / grasa", defaultDetail: "Grasa de litio NLGI 2 EP" },
+    { title: "Torque de apriete", defaultDetail: "210 Nm en pernos de anclaje" },
+    { title: "Temperatura normal", defaultDetail: "82 a 95 °C en régimen de faena" },
+  ],
+  fallas: [
+    { title: "Fuga de aceite o fluido", defaultDetail: "Pérdida por sellos gastados o acoples flojos" },
+    { title: "Pérdida de presión / potencia", defaultDetail: "Filtros colmatados o válvula de alivio descalibrada" },
+    { title: "Sobrecalentamiento", defaultDetail: "Temperatura sobre 102 °C por enfriador o radiador colmatado" },
+    { title: "Ruido o vibración anormal", defaultDetail: "Desgaste en rodamientos o juego excesivo en bujes" },
+  ],
+  procedimientos: [
+    { title: "Bloqueo de seguridad LOTO", defaultDetail: "Aplicar candado en desconectador y purgar presión residual" },
+    { title: "Comprobación de nivel", defaultDetail: "Revisar en frío sobre terreno nivelado entre marcas MIN y MAX" },
+    { title: "Medición con manómetro calibrado", defaultDetail: "Conectar en toma minimess y comparar con tolerancia OEM" },
+    { title: "Purga de aire del circuito", defaultDetail: "Accionar cebador o purga hasta flujo continuo sin burbujas" },
+  ],
+};
+
 export function FichaTagsField({
   tipo,
   sistemaName,
@@ -114,6 +136,8 @@ export function FichaTagsField({
   const [inputDetail, setInputDetail] = useState("");
   const [modoLibre, setModoLibre] = useState(false);
   const [rawText, setRawText] = useState(initialValue || "");
+
+  const sugerencias = SUGERENCIAS_TAGS[tipo.slug] || [];
 
   const config = TIPO_CONFIG[tipo.slug] || {
     label: tipo.name,
@@ -252,6 +276,34 @@ export function FichaTagsField({
               ))
             )}
           </div>
+
+          {sugerencias.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10, padding: "2px 0" }}>
+              <span style={{ fontSize: 11.5, color: "var(--text-mid)", marginRight: 2 }}>Sugerencias rápidas:</span>
+              {sugerencias.map((sug, sIdx) => (
+                <button
+                  key={sIdx}
+                  type="button"
+                  className="field-inline-link"
+                  onClick={() => {
+                    setInputTitle(sug.title);
+                    if (!inputDetail.trim()) setInputDetail(sug.defaultDetail);
+                  }}
+                  style={{
+                    fontSize: 11.5,
+                    padding: "3px 8px",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid var(--graphite-line)",
+                    borderRadius: 6,
+                    color: "var(--text-hi)",
+                    cursor: "pointer",
+                  }}
+                >
+                  + {sug.title}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="ficha-tags-add-bar">
             <input

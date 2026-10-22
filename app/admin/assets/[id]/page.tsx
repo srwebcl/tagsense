@@ -7,7 +7,6 @@ import {
   eliminarActivo,
   resolverSolicitudAdmin,
 } from "@/app/admin/assets/actions";
-import { uploads } from "@/lib/storage";
 import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { DeleteAssetButton } from "@/app/admin/_components/DeleteAssetButton";
 import { CopyTagLinkButton } from "@/app/admin/_components/CopyTagLinkButton";
@@ -84,7 +83,9 @@ export default async function AssetDetailPage({
   const reindexarDeEsteActivo = reindexarDocumento.bind(null, id);
   const eliminarEsteActivo = eliminarActivo.bind(null, id);
   const resolverSolicitudDeEsteActivo = resolverSolicitudAdmin.bind(null, id);
-  const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
+  const photoUrl = asset.photo_url
+    ? `/api/assets/${id}/photo?v=${encodeURIComponent(asset.photo_url)}`
+    : null;
 
   return (
     <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>
@@ -99,7 +100,13 @@ export default async function AssetDetailPage({
         <div className="asset-head">
           <div className="asset-head-id">
             {photoUrl ? (
-              <img src={photoUrl} alt={asset.name} className="asset-photo" />
+              <img
+                src={photoUrl}
+                alt={asset.name}
+                className="asset-photo"
+                loading="lazy"
+                decoding="async"
+              />
             ) : null}
             <div>
               <h1>{asset.name}</h1>

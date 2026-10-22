@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { uploads } from "@/lib/storage";
 import { actualizarActivo } from "@/app/admin/assets/actions";
 import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { SubmitButton } from "@/app/admin/_components/SubmitButton";
@@ -27,7 +26,9 @@ export default async function EditAssetPage({
   if (!asset) notFound();
 
   const specs = asset.specs || {};
-  const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
+  const photoUrl = asset.photo_url
+    ? `/api/assets/${id}/photo?v=${encodeURIComponent(asset.photo_url)}`
+    : null;
   const actualizarEsteActivo = actualizarActivo.bind(null, id);
 
   const typesResult = await pool.query(`select name from asset_types where tenant_id = $1 order by name`, [appUser.tenant_id]);
@@ -58,7 +59,13 @@ export default async function EditAssetPage({
             <div className="field">
               <label>Foto principal</label>
               {photoUrl ? (
-                <img src={photoUrl} alt={asset.name} style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover", marginBottom: 10 }} />
+                <img
+                  src={photoUrl}
+                  alt={asset.name}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover", marginBottom: 10 }}
+                />
               ) : null}
               <FileDropzone
                 name="photo"

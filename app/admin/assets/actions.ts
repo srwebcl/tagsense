@@ -191,9 +191,20 @@ async function guardarFotoActivo(tenantId: string, assetId: string, photo: File)
     throw new Error("El archivo debe ser una imagen JPEG, PNG o WEBP válida.");
   }
 
+  // Consultar si había foto previa para no dejar archivos huérfanos
+  const prevResult = await pool.query(
+    `select photo_url from assets where tenant_id = $1 and id = $2 limit 1`,
+    [tenantId, assetId]
+  );
+  const oldKey = prevResult.rows[0]?.photo_url;
+
   const key = `asset-photos/${tenantId}/${assetId}/${randomUUID()}-${photo.name}`;
   await uploads.upload(key, bytes, { contentType: IMAGE_CONTENT_TYPE[kind] });
   await pool.query(`update assets set photo_url = $1 where tenant_id = $2 and id = $3`, [key, tenantId, assetId]);
+
+  if (oldKey && oldKey !== key) {
+    uploads.delete(oldKey).catch(() => {});
+  }
 }
 
 export async function subirFotoActivo(assetId: string, formData: FormData) {
@@ -214,6 +225,7 @@ export async function subirFotoActivo(assetId: string, formData: FormData) {
 
   await guardarFotoActivo(appUser.tenant_id, assetId, photo);
   const returnTo = String(formData.get("return_to") || `/admin/assets/${assetId}`);
+  revalidatePath("/admin");
   revalidatePath(`/admin/assets/${assetId}`);
   revalidatePath(`/admin/assets/${assetId}/ficha`);
   redirect(returnTo);
@@ -470,4 +482,144 @@ export async function resolverSolicitudAdmin(assetId: string, requestId: string)
   );
   revalidatePath(`/admin/assets/${assetId}`);
   redirect(`/admin/assets/${assetId}`);
+}
+
+export async function copiarFichaDesdeActivo(targetAssetId: string, sourceAssetId: string) {
+  const appUser = await requireAdmin();
+
+  const targetResult = await pool.query(
+    `select id, name from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, targetAssetId]
+  );
+  if (!targetResult.rows[0]) throw new Error("Activo destino no encontrado.");
+
+  const sourceResult = await pool.query(
+    `select id, name, specs from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, sourceAssetId]
+  );
+  const source = sourceResult.rows[0];
+  if (!source) throw new Error("Activo origen no encontrado.");
+
+  // 1. Copiar specs
+  if (source.specs && Object.keys(source.specs).length > 0) {
+    await pool.query(
+      `update assets set specs = $1 where tenant_id = $2 and id = $3`,
+      [JSON.stringify(source.specs), appUser.tenant_id, targetAssetId]
+    );
+  }
+
+  // 2. Copiar componentes
+  const sourceComponents = await pool.query(
+    `select category_slug from asset_components where tenant_id = $1 and asset_id = $2`,
+    [appUser.tenant_id, sourceAssetId]
+  );
+  for (const c of sourceComponents.rows) {
+    await pool.query(
+      `insert into asset_components (tenant_id, asset_id, category_slug)
+       values ($1, $2, $3)
+       on conflict (asset_id, category_slug) do nothing`,
+      [appUser.tenant_id, targetAssetId, c.category_slug]
+    );
+  }
+
+  // 3. Copiar documentos de fichas técnicas estructuradas
+  const sourceDocs = await pool.query(
+    `select title, category_slug, field_type_slug, raw_text
+     from asset_documents
+     where tenant_id = $1 and asset_id = $2 and source_type = 'simulated'
+       and category_slug is not null and field_type_slug is not null`,
+    [appUser.tenant_id, sourceAssetId]
+  );
+
+  const docsAIndexar: string[] = [];
+
+  for (const doc of sourceDocs.rows) {
+    if (!doc.raw_text) continue;
+    const existing = await pool.query(
+      `select id from asset_documents
+       where tenant_id = $1 and asset_id = $2 and source_type = 'simulated'
+         and category_slug = $3 and field_type_slug = $4 limit 1`,
+      [appUser.tenant_id, targetAssetId, doc.category_slug, doc.field_type_slug]
+    );
+
+    if (existing.rows[0]) {
+      const docId = existing.rows[0].id;
+      await pool.query(
+        `update asset_documents set raw_text = $1, title = $2 where tenant_id = $3 and id = $4`,
+        [doc.raw_text, doc.title, appUser.tenant_id, docId]
+      );
+      docsAIndexar.push(docId);
+    } else {
+      const inserted = await pool.query(
+        `insert into asset_documents (tenant_id, asset_id, title, file_url, raw_text, source_type, category_slug, field_type_slug, uploaded_by)
+         values ($1, $2, $3, null, $4, 'simulated', $5, $6, $7)
+         returning id`,
+        [appUser.tenant_id, targetAssetId, doc.title, doc.raw_text, doc.category_slug, doc.field_type_slug, appUser.id]
+      );
+      docsAIndexar.push(inserted.rows[0].id);
+    }
+  }
+
+  for (const docId of docsAIndexar) {
+    after(() => indexSimulatedText(docId, appUser.tenant_id));
+  }
+
+  revalidatePath(`/admin/assets/${targetAssetId}/ficha`);
+  revalidatePath(`/admin/assets/${targetAssetId}`);
+  return { success: true, count: docsAIndexar.length };
+}
+
+export async function cargarPlantillaTipoActivo(assetId: string) {
+  const appUser = await requireAdmin();
+
+  const assetResult = await pool.query(
+    `select id, name, asset_type, model from assets where tenant_id = $1 and id = $2 limit 1`,
+    [appUser.tenant_id, assetId]
+  );
+  const target = assetResult.rows[0];
+  if (!target) throw new Error("Activo no encontrado.");
+
+  const tipoNorm = `${target.asset_type || ""} ${target.name || ""} ${target.model || ""}`.toLowerCase();
+
+  let patronBusqueda = "LH621i"; // Pala cargadora por defecto si es pala/cargador
+  if (tipoNorm.includes("camion minero") || tipoNorm.includes("caex") || tipoNorm.includes("mt65")) {
+    patronBusqueda = "MT65S";
+  } else if (tipoNorm.includes("apoyo") || tipoNorm.includes("articulado") || tipoNorm.includes("volvo") || tipoNorm.includes("a60")) {
+    patronBusqueda = "A60J";
+  } else if (tipoNorm.includes("pala") || tipoNorm.includes("cargador") || tipoNorm.includes("lhd") || tipoNorm.includes("toro")) {
+    patronBusqueda = "LH621i";
+  }
+
+  const sourceResult = await pool.query(
+    `select a.id, a.name, count(ad.id) as docs_count
+     from assets a
+     join asset_documents ad on ad.asset_id = a.id and ad.source_type = 'simulated'
+     where a.tenant_id = $1 and (a.model ilike $2 or a.name ilike $2 or a.tag_code ilike $2)
+     group by a.id, a.name
+     order by count(ad.id) desc
+     limit 1`,
+    [appUser.tenant_id, `%${patronBusqueda}%`]
+  );
+
+  let sourceAssetId = sourceResult.rows[0]?.id;
+
+  if (!sourceAssetId) {
+    const fallbackSource = await pool.query(
+      `select a.id, a.name, count(ad.id) as docs_count
+       from assets a
+       join asset_documents ad on ad.asset_id = a.id and ad.source_type = 'simulated'
+       where a.tenant_id = $1 and a.id != $2
+       group by a.id, a.name
+       order by count(ad.id) desc
+       limit 1`,
+      [appUser.tenant_id, assetId]
+    );
+    sourceAssetId = fallbackSource.rows[0]?.id;
+  }
+
+  if (!sourceAssetId) {
+    throw new Error("No se encontró ningún activo con plantilla técnica completa para clonar.");
+  }
+
+  return await copiarFichaDesdeActivo(assetId, sourceAssetId);
 }

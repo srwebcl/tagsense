@@ -140,6 +140,18 @@ function parseMarkdownFile(filePath) {
   return { tag_code, activo, tipo, fabricante, modelo, specs, systems };
 }
 
+// Cargar variables desde .env.local si existen
+const envPath = path.resolve(process.cwd(), ".env.local");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf8");
+  for (const line of envContent.split("\n")) {
+    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)?$/);
+    if (m && !process.env[m[1]]) {
+      process.env[m[1]] = (m[2] || "").trim().replace(/^["']|["']$/g, "");
+    }
+  }
+}
+
 async function main() {
   const connectionString = process.env.APP_DATABASE_URL || process.env.DATABASE_URL;
   const apiKey = process.env.VOYAGE_API_KEY;
@@ -149,8 +161,7 @@ async function main() {
     process.exit(1);
   }
   if (!apiKey) {
-    console.error("Falta VOYAGE_API_KEY");
-    process.exit(1);
+    console.warn("⚠️ VOYAGE_API_KEY no detectada. Se importará el texto a la base de datos sin generar embeddings vectoriales.");
   }
 
   const pool = new Pool({ connectionString });
@@ -268,27 +279,35 @@ async function main() {
       });
     }
 
-    console.log(`  ⏳ Solicitando embeddings para ${allChunksInfo.length} chunks en batch único a Voyage AI...`);
-    const allChunksTexts = allChunksInfo.map((c) => c.chunk);
-    const embeddings = await embedInBatches(allChunksTexts, apiKey);
+    if (apiKey) {
+      try {
+        console.log(`  ⏳ Solicitando embeddings para ${allChunksInfo.length} chunks en batch único a Voyage AI...`);
+        const allChunksTexts = allChunksInfo.map((c) => c.chunk);
+        const embeddings = await embedInBatches(allChunksTexts, apiKey);
 
-    // Borrar chunks previos de estos documentos
-    for (const item of docsToProcess) {
-      await pool.query(
-        `delete from document_chunks where document_id = $1 and tenant_id = $2`,
-        [item.docId, tenantId]
-      );
-    }
+        // Borrar chunks previos de estos documentos
+        for (const item of docsToProcess) {
+          await pool.query(
+            `delete from document_chunks where document_id = $1 and tenant_id = $2`,
+            [item.docId, tenantId]
+          );
+        }
 
-    // Insertar todos los chunks generados
-    for (let cIdx = 0; cIdx < allChunksInfo.length; cIdx++) {
-      const info = allChunksInfo[cIdx];
-      const emb = embeddings[cIdx];
-      await pool.query(
-        `insert into document_chunks (tenant_id, document_id, content, embedding, chunk_index)
-         values ($1, $2, $3, $4::vector, $5)`,
-        [tenantId, info.docId, info.chunk, toVectorLiteral(emb), info.cIdx]
-      );
+        // Insertar todos los chunks generados
+        for (let cIdx = 0; cIdx < allChunksInfo.length; cIdx++) {
+          const info = allChunksInfo[cIdx];
+          const emb = embeddings[cIdx];
+          if (emb) {
+            await pool.query(
+              `insert into document_chunks (tenant_id, document_id, content, embedding, chunk_index)
+               values ($1, $2, $3, $4::vector, $5)`,
+              [tenantId, info.docId, info.chunk, toVectorLiteral(emb), info.cIdx]
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(`  ⚠️ Voyage AI no disponible o con límite excedido. Se guarda el texto directamente:`, err.message);
+      }
     }
 
     // Actualizar estado de indexado a indexed
@@ -299,7 +318,7 @@ async function main() {
       );
     }
 
-    console.log(`  ✅ ${docsToProcess.length} fichas técnicas indexadas y listas para IA en ${doc.activo}`);
+    console.log(`  ✅ ${docsToProcess.length} fichas técnicas guardadas e indexadas para ${doc.activo}`);
 
     // Si quedan más archivos, esperar 22s para no saturar el límite de 3 RPM de la cuenta gratuita
     if (fIdx < MD_FILES.length - 1) {

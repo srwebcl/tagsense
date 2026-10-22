@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
 import { listarCategoriasFalla, listarComponentesDeActivo, listarTiposFicha } from "@/lib/fault-categories";
-import { uploads } from "@/lib/storage";
 import { guardarFichaDeSistema, agregarComponenteActivo, quitarComponenteActivo, subirFotoActivo } from "@/app/admin/assets/actions";
 import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { FichaEditor } from "./FichaEditor";
@@ -19,7 +18,7 @@ export default async function FichaTecnicaPage({
   const { sistema: sistemaInicial } = await searchParams;
 
   const assetResult = await pool.query(
-    `select id, tag_code, name, photo_url from assets where tenant_id = $1 and id = $2 limit 1`,
+    `select id, tag_code, name, asset_type, model, photo_url from assets where tenant_id = $1 and id = $2 limit 1`,
     [appUser.tenant_id, id]
   );
   const asset = assetResult.rows[0];
@@ -34,7 +33,7 @@ export default async function FichaTecnicaPage({
     );
   }
 
-  const [catalogoCompleto, componentes, tipos, fichaResult] = await Promise.all([
+  const [catalogoCompleto, componentes, tipos, fichaResult, otrosActivosResult] = await Promise.all([
     listarCategoriasFalla(appUser.tenant_id),
     listarComponentesDeActivo(appUser.tenant_id, id),
     listarTiposFicha(appUser.tenant_id),
@@ -42,6 +41,15 @@ export default async function FichaTecnicaPage({
       `select category_slug, field_type_slug, raw_text from asset_documents
        where tenant_id = $1 and asset_id = $2 and source_type = 'simulated'
          and category_slug is not null and field_type_slug is not null`,
+      [appUser.tenant_id, id]
+    ),
+    pool.query(
+      `select a.id, a.name, a.tag_code, a.model, count(ad.id) as docs_count
+       from assets a
+       left join asset_documents ad on ad.asset_id = a.id and ad.source_type = 'simulated'
+       where a.tenant_id = $1 and a.id != $2
+       group by a.id, a.name, a.tag_code, a.model
+       order by count(ad.id) desc, a.name asc`,
       [appUser.tenant_id, id]
     ),
   ]);
@@ -62,7 +70,9 @@ export default async function FichaTecnicaPage({
 
   const agregarComponente = agregarComponenteActivo.bind(null, id);
   const quitarComponente = quitarComponenteActivo.bind(null, id);
-  const photoUrl = asset.photo_url ? await uploads.url(asset.photo_url, { expiresIn: 3600 }) : null;
+  const photoUrl = asset.photo_url
+    ? `/api/assets/${id}/photo?v=${encodeURIComponent(asset.photo_url)}`
+    : null;
   const subirFotoAction = subirFotoActivo.bind(null, id);
 
   return (
@@ -90,6 +100,7 @@ export default async function FichaTecnicaPage({
 
         <FichaEditor
           assetId={id}
+          assetType={asset.asset_type || null}
           photoUrl={photoUrl}
           subirFotoAction={subirFotoAction}
           componentes={componentes}
@@ -100,6 +111,7 @@ export default async function FichaTecnicaPage({
           agregarComponente={agregarComponente}
           quitarComponente={quitarComponente}
           sistemaInicial={sistemaInicial}
+          otrosActivos={otrosActivosResult.rows}
         />
       </div>
     </AdminShell>

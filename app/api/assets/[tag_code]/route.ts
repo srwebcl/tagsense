@@ -1,6 +1,5 @@
 import { getCurrentAppUser } from "@/lib/current-user";
 import { pool } from "@/lib/db";
-import { uploads } from "@/lib/storage";
 import { withErrorLogging } from "@/lib/api-handler";
 
 // Resuelve un activo por el código leído del tag (QR o NFC) — ver API_SPEC.md.
@@ -32,7 +31,7 @@ export const GET = withErrorLogging("assets/:tag_code", async (
   }
 
   if (asset.photo_url) {
-    asset.photo_url = await uploads.url(asset.photo_url, { expiresIn: 3600 });
+    asset.photo_url = `/api/assets/${asset.id}/photo?v=${encodeURIComponent(asset.photo_url)}`;
   }
 
   return Response.json(asset);

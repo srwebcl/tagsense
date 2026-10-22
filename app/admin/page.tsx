@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/require-admin";
 import { pool } from "@/lib/db";
-import { uploads } from "@/lib/storage";
 import { AdminShell } from "@/app/admin/_components/AdminShell";
 import { ActivosTable, type AssetListItem } from "@/app/admin/_components/ActivosTable";
 
@@ -16,31 +15,21 @@ export default async function AdminHomePage() {
     [appUser.tenant_id]
   );
 
-  // Resolver URLs de fotos si existen
-  const assets: AssetListItem[] = await Promise.all(
-    result.rows.map(async (row) => {
-      let photoUrl: string | null = null;
-      if (row.photo_url) {
-        try {
-          photoUrl = await uploads.url(row.photo_url, { expiresIn: 3600 });
-        } catch {
-          photoUrl = null;
-        }
-      }
-      return {
-        id: row.id,
-        tag_code: row.tag_code,
-        name: row.name,
-        model: row.model,
-        manufacturer: row.manufacturer,
-        status: row.status,
-        location: row.location,
-        asset_type: row.asset_type,
-        photo_url: photoUrl,
-        hour_meter: row.hour_meter,
-      };
-    })
-  );
+  // Asignar URLs de fotos usando endpoint con caché permanente HTTP
+  const assets: AssetListItem[] = result.rows.map((row) => ({
+    id: row.id,
+    tag_code: row.tag_code,
+    name: row.name,
+    model: row.model,
+    manufacturer: row.manufacturer,
+    status: row.status,
+    location: row.location,
+    asset_type: row.asset_type,
+    photo_url: row.photo_url
+      ? `/api/assets/${row.id}/photo?v=${encodeURIComponent(row.photo_url)}`
+      : null,
+    hour_meter: row.hour_meter,
+  }));
 
   return (
     <AdminShell userName={appUser.full_name || appUser.email} userRole={appUser.role}>

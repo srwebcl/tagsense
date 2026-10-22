@@ -1,5 +1,4 @@
 import { pool } from "@/lib/db";
-import { uploads } from "@/lib/storage";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { withErrorLogging } from "@/lib/api-handler";
 
@@ -45,7 +44,7 @@ export const GET = withErrorLogging("public/assets/:tag_code", async (
   }
 
   if (asset.photo_url) {
-    asset.photo_url = await uploads.url(asset.photo_url, { expiresIn: 3600 });
+    asset.photo_url = `/api/assets/${asset.id}/photo?v=${encodeURIComponent(asset.photo_url)}`;
   }
 
   return Response.json(asset);

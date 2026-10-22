@@ -5,6 +5,7 @@ import { anthropic } from "@/lib/anthropic";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withErrorLogging } from "@/lib/api-handler";
 import { listarTiposFicha, type FichaFieldType } from "@/lib/fault-categories";
+import { generarRespuestaGemini } from "@/lib/gemini";
 
 const TOP_K = 6;
 const MODEL = "claude-sonnet-5-5"; // ver /tagsense-docs/skills/rag-assistant/SKILL.md
@@ -26,7 +27,14 @@ REGLAS DE BOT OBLIGATORIAS:
    - Diagnóstico y Parámetros Técnicos: Explica qué indica la documentación oficial (cita tolerancias, presiones, fluidos, componentes si aplican usando los tags de Equipamiento).
    - ALTERNATIVAS DE ACCIÓN: Da siempre entre 2 y 3 alternativas concretas numeradas para que el técnico decida qué hacer a continuación. Cuando el sistema consultado tenga tags en "Fallas principales", UTILIZA LOS TÍTULOS CORTOS de esos tags como opciones directas de diagnóstico.
    - Pregunta de seguimiento: Invita al técnico a elegir una alternativa.
-4. Si la documentación o ficha disponible no cubre la pregunta con certeza, indícalo con franqueza ("No cuento con esa especificación exacta en la documentación cargada...") y sugiere alternativas viables (inspección física, consultar al supervisor o revisar manual general).
+4. REGLA ESTRICTA SI FALTA INFORMACIÓN TÉCNICA:
+   Si la ficha técnica o documentación cargada NO contiene el dato consultado (por ejemplo: capacidad de aceite de motor, presiones, torques, etc.):
+   - NUNCA inventes información ni asumas datos de otros equipos.
+   - PROHIBIDO TERMINANTEMENTE mencionar el Administrador, la edición de fichas técnicas o invitar a ingresar información en paneles web.
+   - Responde directa y honestamente usando estricta y únicamente la siguiente fórmula:
+     "En la ficha técnica de [Nombre del Activo] no está registrada la [especificación consultada]."
+     Ejemplo exacto: "En la ficha técnica de Pala de Prueba QA no está registrada la capacidad de aceite de motor."
+   - Ofrece como alternativas consultar con supervisión, verificar físicamente en terreno o revisar otro componente disponible.
 5. BLOQUE DE ALTERNATIVAS AL FINAL:
    Al final de tu respuesta debes incluir SIEMPRE una línea especial con formato JSON:
    <<<ALTERNATIVAS: ["1. Título corto", "2. Título corto", "3. Título corto"]>>>
@@ -40,7 +48,16 @@ REGLAS DE BOT OBLIGATORIAS:
      * En el texto de tu respuesta: explica el síntoma y su diagnóstico técnico detallado.
      * En el bloque <<<ALTERNATIVAS: [...]>>>: ofrece los títulos cortos de los síntomas para que el técnico los seleccione con un toque.
    - Tags de Procedimientos ("• Paso: Detalle"): Guía al técnico con pasos secuenciales numerados en terreno.
-7. Responde en español de Chile, con tono técnico, claro y conciso para leer en un teléfono en faena.`;
+7. Responde en español de Chile, con tono técnico, claro y conciso para leer en un teléfono en faena.
+8. DIFERENCIACIÓN OBLIGATORIA ENTRE CONSULTAS INFORMATIVAS Y REPORTES DE FALLA:
+   - Si el técnico hace una consulta informativa pura (por ejemplo: "¿qué motor usa?", "¿cuál es la potencia?", "¿cuál es el peso?", "¿qué aceite lleva?"):
+     * Responde ÚNICAMENTE con los datos técnicos de la ficha oficial.
+     * NUNCA asumas que el equipo está fallando ni preguntes de inmediato qué falla tiene.
+     * En las alternativas de acción, ofrece opciones de fluidos, especificaciones adicionales, ver ficha técnica o consultar otro componente.
+   - Si el técnico indica que no hay fallas ("no tiene fallas", "no hay problemas", "solo quería saber", "todo bien", "equipo normal/operativo"):
+     * Valida con cordialidad que el componente y el equipo operan con normalidad.
+     * Cierra el ciclo de diagnóstico de averías y ofrece opciones neutrales.
+   - Solo debes ofrecer alternativas de síntomas de fallas o iniciar el árbol de diagnóstico si el técnico explícitamente reporta una avería, ruido, fuga, humo o código de falla.`;
 
 function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(",")}]`;
@@ -56,7 +73,7 @@ const STOPWORDS_PREGUNTA = new Set([
 ]);
 
 function normalizarTexto(texto: string): string {
-  return texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return (texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function extraerPalabrasClave(pregunta: string, nombreActivo: string): string[] {
@@ -133,6 +150,13 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   const assetId = body?.asset_id;
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   const categorySlug = typeof body?.category_slug === "string" && body.category_slug ? body.category_slug : null;
+  const historyRaw = Array.isArray(body?.history) ? body.history : [];
+  const history = historyRaw
+    .filter((h: any) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+    .map((h: any) => ({
+      role: h.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: String(h.content).trim(),
+    }));
   if (!assetId || !message) {
     return Response.json({ error: { code: "bad_request", message: "Falta asset_id o message." } }, { status: 400 });
   }
@@ -163,11 +187,10 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   const componentes = componentsResult.rows;
 
   const fichasResult = await pool.query(
-    `select ad.title, ad.category_slug, ad.field_type_slug, dc.content
+    `select ad.title, ad.category_slug, ad.field_type_slug, coalesce(ad.raw_text, '') as content
      from asset_documents ad
-     join document_chunks dc on dc.document_id = ad.id
      where ad.tenant_id = $1 and ad.asset_id = $2 and ad.category_slug is not null
-     order by ad.category_slug, ad.field_type_slug, dc.chunk_index`,
+     order by ad.category_slug, ad.field_type_slug`,
     [appUser.tenant_id, realAssetId]
   );
   const fichasSistemas = fichasResult.rows;
@@ -282,35 +305,69 @@ ${manualContextBlock}
 CONSULTA TÉCNICA DEL OPERADOR/MANTENEDOR:
 "${message}"`;
 
-  let answer: string;
+  const esAccionArbol =
+    categorySlug !== null ||
+    /^(\d+[\.\)]|\ud83d|\ud83c|\u2699|\u26a0|\u2705|\u274c|\ud83d\uded1)/.test(message) ||
+    /^(tengo una falla|falla en|consultar especificaciones|cambiar componente|otro componente|falla confirmada|falla corregida|anomalia confirmada|abrir informe|procedimiento)/i.test(
+      message.trim()
+    );
+
+  let answer = "";
   let alternativas: string[] = [];
   let fallback = false;
 
-  try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    const rawAnswer = textBlock && textBlock.type === "text" ? textBlock.text : "";
-
-    // Extraer alternativas estructuradas del bot
-    const matchAlt = rawAnswer.match(/<<<ALTERNATIVAS:\s*(\[[\s\S]*?\])>>>/);
-    if (matchAlt) {
-      try {
-        alternativas = JSON.parse(matchAlt[1]);
-      } catch (e) {
-        console.warn("[assistant/chat] No se pudo parsear JSON de alternativas de Claude:", e);
+  // 1. Prioridad: Google AI Studio (Gemini 3.5 Flash - Nivel gratuito veloz y de alto contexto)
+  if (process.env.GOOGLE_API_KEY) {
+    try {
+      const geminiResult = await generarRespuestaGemini(
+        SYSTEM_PROMPT,
+        userPrompt,
+        history
+      );
+      if (geminiResult && geminiResult.message) {
+        answer = geminiResult.message;
+        alternativas = geminiResult.alternativas;
       }
-      answer = rawAnswer.replace(/<<<ALTERNATIVAS:\s*\[[\s\S]*?\]>>>/, "").trim();
-    } else {
-      answer = rawAnswer.trim();
+    } catch (err) {
+      console.warn(`[assistant/chat] Gemini no disponible, intentando proveedores secundarios:`, err);
     }
-  } catch (err) {
-    console.error(`[assistant/chat] Claude no disponible, activando motor Bot de contingencia (tenant ${appUser.tenant_id}, asset ${assetId}):`, err);
+  }
+
+  // 2. Proveedor Secundario: Anthropic Claude (si está configurado)
+  if (!answer && process.env.ANTHROPIC_API_KEY) {
+    try {
+      const anthropicMessages = [
+        ...history,
+        { role: "user" as const, content: userPrompt },
+      ];
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: anthropicMessages,
+      });
+
+      const textBlock = response.content.find((b) => b.type === "text");
+      const rawAnswer = textBlock && textBlock.type === "text" ? textBlock.text : "";
+
+      const matchAlt = rawAnswer.match(/<<<ALTERNATIVAS:\s*(\[[\s\S]*?\])>>>/);
+      if (matchAlt) {
+        try {
+          alternativas = JSON.parse(matchAlt[1]);
+        } catch (e) {
+          console.warn("[assistant/chat] No se pudo parsear JSON de alternativas de Claude:", e);
+        }
+        answer = rawAnswer.replace(/<<<ALTERNATIVAS:\s*\[[\s\S]*?\]>>>/, "").trim();
+      } else {
+        answer = rawAnswer.trim();
+      }
+    } catch (err) {
+      console.warn(`[assistant/chat] Claude no disponible:`, err);
+    }
+  }
+
+  // 3. Respaldo Estructurado Inteligente (Garantía 100% de operatividad en faena sin internet o contingencia)
+  if (!answer) {
     fallback = true;
     const botRespaldo = construirRespuestaBotInteligente(
       asset,
@@ -330,9 +387,8 @@ CONSULTA TÉCNICA DEL OPERADOR/MANTENEDOR:
     }
   }
 
-  // Si por alguna razón no se generaron alternativas, asegurar al menos 2
   if (!alternativas || alternativas.length === 0) {
-    alternativas = generarAlternativasPorDefecto(categorySlug, keywords, asset.name);
+    alternativas = ["📋 Especificaciones Técnicas", "🔄 Cambiar de componente"];
   }
 
   await pool.query(
@@ -352,10 +408,9 @@ CONSULTA TÉCNICA DEL OPERADOR/MANTENEDOR:
   return Response.json({ message: answer, sources, alternativas });
 });
 
-// ================= MOTOR INTELIGENTE DEL BOT (CONTINGENCIA / SIN IA) =================
-// Cuando la API de Anthropic no tiene saldo, se cae o se ejecuta sin conexión remota,
-// el asistente NO devuelve texto crudo copiado ni un mensaje de error: actúa como
-// un BOT conversacional inteligente estructurando la ficha del activo y las opciones.
+// ================= MOTOR INTELIGENTE DEL BOT (100% ESTRUCTURADO Y LÓGICO) =================
+// Opera como un árbol de diagnóstico técnico guiado con sentido común minero.
+// Se alimenta exclusivamente de la información real cargada en las fichas técnicas del activo.
 
 interface AssetData {
   name: string;
@@ -364,80 +419,79 @@ interface AssetData {
   status: string | null;
   hour_meter: string | null;
   manufacturer: string | null;
+  location?: string | null;
   specs: Record<string, string> | null;
 }
 
-function generarAlternativasPorDefecto(categorySlug: string | null, keywords: string[], _assetName: string): string[] {
-  const slug = categorySlug || (keywords.length ? keywords[0] : "");
-  if (slug.includes("freno")) {
-    return [
-      "1. Inspección de fugas y nivel",
-      "2. Prueba de presión en circuitos",
-      "3. Procedimiento de purga de aire",
-    ];
-  }
-  if (slug.includes("hidraul") || slug.includes("fuga") || slug.includes("presion")) {
-    return [
-      "1. Revisión de nivel y estanque",
-      "2. Medición de presión de trabajo",
-      "3. Inspección visual de mangueras",
-    ];
-  }
-  if (slug.includes("temperatura") || slug.includes("motor") || slug.includes("calor")) {
-    return [
-      "1. Verificación de refrigerante",
-      "2. Estado del radiador y correas",
-      "3. Parámetros de temperatura OEM",
-    ];
-  }
-  if (slug.includes("direccion") || slug.includes("volante")) {
-    return [
-      "1. Comprobar juego y cilindros",
-      "2. Prueba de dirección secundaria",
-      "3. Presión en válvulas orbitales",
-    ];
-  }
-  if (slug.includes("electr") || slug.includes("bateria") || slug.includes("sensor")) {
-    return [
-      "1. Medición de voltaje de baterías",
-      "2. Revisión de fusibles principales",
-      "3. Códigos de alerta en cabina",
-    ];
-  }
-  return [
-    "1. Ver especificaciones técnicas",
-    "2. Procedimientos de inspección",
-    "3. Puntos de engrase y fluidos",
-  ];
+interface TagItem {
+  title: string;
+  detail: string;
 }
 
-function limpiarSnippetManual(raw: string): string | null {
-  if (!raw) return null;
-  // Filtrar fragmentos con encabezados de tablas OCR o volcados de equipamiento crudos
-  if (/kPa|psi\s*\d|--\s*\d+\s*of\s*\d+\s*--|USB-[CA]|Portavasos|Altavoces\s*\(/i.test(raw)) {
-    return null;
-  }
-  let texto = raw
-    .replace(/--\s*\d+\s*of\s*\d+\s*--/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (texto.length < 25) return null;
-  if (texto.length > 140) {
-    const match = texto.slice(0, 140).match(/^([^.!?]+[.!?])/);
-    if (match && match[1].length > 25) {
-      texto = match[1].trim();
+function parseFichaTags(raw: string): TagItem[] {
+  if (!raw) return [];
+  const lines = raw.split(/\n|•/).map((l) => l.trim()).filter(Boolean);
+  const items: TagItem[] = [];
+  for (const line of lines) {
+    const clean = line.replace(/^[\s\-*•\d.]+/, "").trim();
+    if (!clean) continue;
+    const colonIdx = clean.indexOf(":");
+    if (colonIdx > 0 && colonIdx <= 65) {
+      items.push({
+        title: clean.substring(0, colonIdx).trim(),
+        detail: clean.substring(colonIdx + 1).trim(),
+      });
     } else {
-      texto = texto.slice(0, 130).trim() + "…";
+      const dashIdx = clean.search(/\s+[—–-]\s+/);
+      if (dashIdx > 0 && dashIdx <= 65) {
+        items.push({
+          title: clean.substring(0, dashIdx).trim(),
+          detail: clean.substring(dashIdx).replace(/^[\s—–-]+/, "").trim(),
+        });
+      } else {
+        items.push({
+          title: clean,
+          detail: "",
+        });
+      }
     }
   }
-  return texto;
+  return items;
 }
 
-function construirRespuestaBotInteligente(
+const ICONOS_COMPONENTES: Record<string, string> = {
+  frenos: "🛑",
+  motor: "⚙️",
+  hidraulico: "💧",
+  tolva: "📦",
+  direccion: "🔄",
+  ejes: "🚛",
+  temperatura: "🌡️",
+  electrico: "⚡",
+  suspension: "🔩",
+  neumaticos: "🛞",
+  sensores: "🚨",
+};
+
+const NOMBRES_FALLBACK: Record<string, string> = {
+  frenos: "Frenos y Retardo",
+  motor: "Motor y Combustible",
+  hidraulico: "Sistema Hidráulico",
+  tolva: "Tolva y Levante",
+  direccion: "Dirección y Articulación",
+  ejes: "Transmisión y Ejes",
+  temperatura: "Refrigeración y Temperatura",
+  electrico: "Sistema Eléctrico y Sensores",
+  suspension: "Suspensión y Chasis",
+  neumaticos: "Neumáticos y Llantas",
+  sensores: "Sensores y Telemetría",
+};
+
+export function construirRespuestaBotInteligente(
   asset: AssetData,
   componentes: { slug: string; name: string }[],
   fichasSistemas: { title: string; category_slug: string | null; field_type_slug?: string | null; content: string }[],
-  chunks: { content: string; title: string; category_slug: string | null }[],
+  _chunks: { content: string; title: string; category_slug: string | null }[],
   keywords: string[],
   categorySlug: string | null,
   message: string
@@ -448,17 +502,134 @@ function construirRespuestaBotInteligente(
   const specs = asset.specs || {};
   const fuentesUsadas: string[] = ["Ficha Técnica Oficial"];
 
-  // Helper para buscar fichas guardadas por el admin
-  const buscarNotaFicha = (slug: string): string | null => {
-    const f = fichasSistemas.find((item) => item.category_slug === slug);
-    if (f && f.content) {
-      if (!fuentesUsadas.includes(f.title)) fuentesUsadas.push(f.title);
-      return f.content.trim().slice(0, 160);
-    }
-    return null;
+  // Helper para nombre legible de categoría
+  const getNombreComp = (slug: string): string => {
+    const c = componentes.find((x) => x.slug === slug);
+    return c?.name || NOMBRES_FALLBACK[slug] || slug.toUpperCase();
   };
 
-  // 1. INTENCIÓN: Consultar otro componente o volver al menú
+  // Helper para lista de botones de componentes del activo
+  const getBotonesComponentes = (): string[] => {
+    const slugsConFicha = Array.from(
+      new Set(fichasSistemas.map((f) => f.category_slug).filter(Boolean) as string[])
+    );
+    const slugsDisponibles = componentes.length
+      ? componentes.map((c) => c.slug)
+      : slugsConFicha;
+
+    const lista = slugsDisponibles.map((slug) => {
+      const icono = ICONOS_COMPONENTES[slug] || "🔧";
+      const nom = getNombreComp(slug);
+      const corto = nom.length > 25 ? nom.slice(0, 24) + "…" : nom;
+      return `${icono} ${corto}`;
+    });
+    return [...lista.slice(0, 6), "📋 Especificaciones Técnicas"];
+  };
+
+  // 1. INTENCIÓN PRIORITARIA: Negación de falla / Aclaración "Sin fallas" / Consulta puramente informativa
+  const esNegacionSinFalla =
+    /\b(no tiene falla|no hay falla|sin falla|no falla|ninguna falla|no presenta falla|cero falla|no tiene averia|sin averia|no hay averia|ningun problema|no tiene problema|no hay problema|sin problema|todo bien|todo normal|todo en orden|esta operativo|esta normal|esta impecable|esta perfecto|solo queria saber|solo queria consultar|solo queria ver|solo era una duda|solo era una pregunta|solo una consulta|solo una duda|solo pregunto|no le pasa nada|no tiene nada|no pasa nada|ninguno|ninguna|nada)\b/i.test(normMsg);
+
+  if (esNegacionSinFalla) {
+    const tieneMotor = normMsg.includes("motor") || categorySlug === "motor";
+    const tieneFrenos = normMsg.includes("freno") || categorySlug === "frenos";
+    const tieneHidraulico = normMsg.includes("hidraul") || categorySlug === "hidraulico";
+
+    let detalleComp = "";
+    if (tieneMotor) detalleComp = "el motor";
+    else if (tieneFrenos) detalleComp = "el sistema de frenos";
+    else if (tieneHidraulico) detalleComp = "el sistema hidráulico";
+    else if (categorySlug) detalleComp = `el sistema de ${getNombreComp(categorySlug)}`;
+
+    if (detalleComp) {
+      return {
+        message: `👍 **Comprobación de Estado · ${detalleComp.toUpperCase()}**\n\nEntendido. Queda registrado que **${detalleComp}** de **${nombreEquipo}${modeloStr}** opera con normalidad y no presenta condiciones anómalas ni fallas activas.\n\n¿Deseas consultar otro parámetro técnico o revisar otro sistema del equipo?`,
+        alternativas: [
+          "🛢️ Fluidos y lubricación",
+          "📋 Ficha Técnica",
+          "🔄 Consultar otro componente",
+          "Escalar a supervisor",
+        ],
+        fuentesAdicionales: fuentesUsadas,
+      };
+    }
+
+    return {
+      message: `👍 **Equipo Operativo**\n\nEntendido. Confirmado que **${nombreEquipo}${modeloStr}** se mantiene en condición normal sin anomalías reportadas en este turno.\n\n¿Deseas consultar especificaciones técnicas, lubricación o revisar algún componente?`,
+      alternativas: [
+        "📋 Ver Ficha Técnica",
+        "🛢️ Puntos de engrase y fluidos",
+        "🔄 Consultar un componente",
+        "Escalar a supervisor",
+      ],
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 2. INTENCIÓN: Agradecimiento y Cierre Cordial
+  const msgSinPuntos = normMsg.replace(/[.,!¡¿?]/g, "").trim();
+  const esAgradecimiento =
+    /^(gracias|muchas gracias|muchisimas gracias|vale|ok gracias|listo gracias|perfecto gracias|excelente gracias|entendido|comprendido|todo claro|buenisimo|de diez|ok vale|muchas gracias bot|gracias bot)$/i.test(msgSinPuntos) ||
+    /\b(muchas gracias|muchisimas gracias)\b/i.test(normMsg);
+
+  if (esAgradecimiento) {
+    return {
+      message: `🤖 **Asistente TAGSENSE**\n\n¡De nada! Quedo a tu disposición si necesitas verificar torques, tolerancias, presiones o procedimientos en terreno para **${nombreEquipo}${modeloStr}**.\n\n¡Buen trabajo y turno seguro en faena!`,
+      alternativas: [
+        "📋 Ver Ficha Técnica",
+        "🔄 Consultar un componente",
+        "Escalar a supervisor",
+      ],
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 3. INTENCIÓN: Registro de anomalía confirmada / Generar informe
+  if (
+    normMsg.includes("falla confirmada") ||
+    normMsg.includes("anomalia confirmada") ||
+    normMsg.includes("generar informe") ||
+    normMsg.includes("abrir informe") ||
+    normMsg.includes("registrar hallazgo") ||
+    normMsg.includes("sigue fallando") ||
+    normMsg.includes("no se soluciono") ||
+    normMsg.includes("requiere reparacion")
+  ) {
+    return {
+      message: `⚠️ **Registro de Anomalía Confirmada**\n\nHe registrado la condición crítica en la sesión de **${nombreEquipo}${modeloStr}**.\n\nEl equipo requiere un informe técnico formal para gestionar repuestos, coordinar la intervención o aplicar detención preventiva segura según protocolo de faena.\n\nPuedes abrir el formulario digital ahora o notificar por WhatsApp al supervisor:`,
+      alternativas: [
+        "Abrir Formulario de Informe",
+        "Escalar a supervisor",
+        "🔄 Cambiar de componente",
+      ],
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 4. INTENCIÓN: Falla corregida en terreno / Sistema operativo
+  if (
+    normMsg.includes("falla corregida") ||
+    normMsg.includes("corregida en terreno") ||
+    normMsg.includes("solucionado") ||
+    normMsg.includes("falla resuelta") ||
+    normMsg.includes("quedo operativo") ||
+    normMsg.includes("reparado") ||
+    normMsg.includes("sin fugas") ||
+    normMsg.includes("aire en circuito purgado") ||
+    normMsg.includes("dentro de rango")
+  ) {
+    return {
+      message: `✅ **Falla Corregida en Terreno**\n\n¡Excelente trabajo! Se verificó la normalización del sistema conforme a los parámetros oficiales de **${nombreEquipo}${modeloStr}**.\n\nEl equipo se mantiene en condición **OPERATIVO**.\n\n¿Deseas registrar una nota breve en el informe técnico o continuar inspeccionando otro componente?`,
+      alternativas: [
+        "Abrir Formulario de Informe",
+        "🔄 Inspeccionar otro componente",
+        "📋 Ver especificaciones",
+      ],
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 5. INTENCIÓN: Volver al menú / Cambiar de componente / Lista de componentes
   if (
     normMsg.includes("otro componente") ||
     normMsg.includes("cambiar componente") ||
@@ -466,270 +637,350 @@ function construirRespuestaBotInteligente(
     normMsg.includes("volver a opciones") ||
     normMsg.includes("menu principal") ||
     normMsg.includes("diagnosticar una falla") ||
-    normMsg.includes("ver sistemas y fallas")
+    normMsg.includes("ver componentes") ||
+    normMsg.includes("inicio") ||
+    normMsg.includes("menu") ||
+    normMsg.includes("hola") ||
+    normMsg.includes("empezar")
   ) {
     return {
-      message: `🤖 **Asistente TAGSENSE · Selección de Sistema**\n\n¿Qué componente o sistema deseas diagnosticar para **${nombreEquipo}${modeloStr}**?`,
+      message: `🤖 **Asistente TAGSENSE · Diagnóstico por Componente**\n\nSelecciona el componente o sistema de **${nombreEquipo}${modeloStr}** que deseas revisar o diagnosticar:`,
+      alternativas: getBotonesComponentes(),
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 6. INTENCIÓN: Consulta Específica de Motorización / Datos del Motor (Informativo, NO falla)
+  const esConsultaFluidos =
+    normMsg.includes("engrase") ||
+    normMsg.includes("fluido") ||
+    normMsg.includes("lubricac") ||
+    normMsg.includes("aceite") ||
+    normMsg.includes("grasa") ||
+    normMsg.includes("refrigerante");
+
+  const esConsultaMotorInfo =
+    !esConsultaFluidos &&
+    (/\b(que motor|cual motor|modelo de motor|motor usa|motor tiene|marca del motor|potencia del motor|cilindrada|ficha del motor|datos del motor|especificaciones del motor|tipo de motor|motorizacion)\b/i.test(normMsg) ||
+    (/\bmotor\b/i.test(normMsg) && /\b(usa|cual|que|modelo|marca|tipo|potencia|hp|rpm)\b/i.test(normMsg)));
+
+  if (esConsultaMotorInfo) {
+    const fichaMotor = fichasSistemas.find(
+      (f) => f.category_slug === "motor" && f.field_type_slug === "equipamiento"
+    );
+    const tagsMotor = fichaMotor && fichaMotor.content ? parseFichaTags(fichaMotor.content) : [];
+    if (fichaMotor && !fuentesUsadas.includes(fichaMotor.title)) fuentesUsadas.push(fichaMotor.title);
+
+    const tagMotorOem = tagsMotor.find((t) => /motor oem|modelo|motor/i.test(t.title));
+    const tagPotencia = tagsMotor.find((t) => /potencia|torque/i.test(t.title));
+    const tagInyeccion = tagsMotor.find((t) => /inyecci|combustible/i.test(t.title));
+    const tagFluidos = tagsMotor.find((t) => /aceite|fluido|capacidad/i.test(t.title));
+
+    const motorDesc = tagMotorOem?.detail || specs.engine_type || specs.motor || asset.model || "Motorización OEM estándar";
+    const potenciaDesc = tagPotencia?.detail || specs.power || "Potencia nominal según diseño OEM";
+
+    let msg = `⚙️ **Motorización Oficial · ${nombreEquipo}${modeloStr}**\n\n`;
+    msg += `Datos técnicos maestros registrados en la ficha oficial:\n\n`;
+    msg += `• **Motor OEM:** ${motorDesc}\n`;
+    msg += `• **Potencia y Régimen:** ${potenciaDesc}\n`;
+    if (tagInyeccion) {
+      msg += `• **Inyección y Alimentación:** ${tagInyeccion.detail}\n`;
+    }
+    if (tagFluidos) {
+      msg += `• **Capacidades registradas:** ${tagFluidos.detail}\n`;
+    }
+    msg += `\n¿Deseas consultar sus capacidades de fluidos, tolerancias de operación o revisar otro componente?`;
+
+    return {
+      message: msg,
       alternativas: [
-        "🛑 Falla en Frenos",
-        "💧 Sistema Hidráulico",
-        "📦 Tolva y Levante",
-        "🌡️ Motor y Temperatura",
-        "⚙️ Dirección y Giro",
-        "⚡ Sistema Eléctrico",
-        "📋 Especificaciones Técnicas",
+        "🛢️ Aceite y fluidos de motor",
+        "📋 Ver Ficha Técnica",
+        "🔍 Diagnosticar una anomalía",
+        "🔄 Cambiar de componente",
       ],
       fuentesAdicionales: fuentesUsadas,
     };
   }
 
-  // 2. INTENCIÓN: Especificaciones técnicas / Ficha oficial
-  // Se evalúa antes de selecciones genéricas para que "1. Ver especificaciones técnicas" muestre las specs reales
+  // 7. INTENCIÓN: Consulta de Transmisión / Tren de Fuerza (Informativo, NO falla)
+  const esConsultaTransmision =
+    /\b(que transmision|cual transmision|caja de cambio|caja de transmision|modelo de transmision|que caja usa|convertidor)\b/i.test(normMsg);
+
+  if (esConsultaTransmision) {
+    const fichaEjes = fichasSistemas.find(
+      (f) => f.category_slug === "ejes" && f.field_type_slug === "equipamiento"
+    );
+    const tagsEjes = fichaEjes && fichaEjes.content ? parseFichaTags(fichaEjes.content) : [];
+    const tagTransmision = tagsEjes.find((t) => /transmision|caja/i.test(t.title));
+    const desc = tagTransmision?.detail || specs.transmission || "Transmisión según diseño OEM";
+
+    return {
+      message: `🚛 **Transmisión y Tren de Fuerza · ${nombreEquipo}${modeloStr}**\n\n• **Transmisión OEM:** ${desc}\n\n¿Deseas consultar presiones de embrague, fluidos o revisar otro sistema?`,
+      alternativas: [
+        "🛢️ Aceite de transmisión",
+        "📋 Ver Ficha Técnica",
+        "🔄 Cambiar de componente",
+      ],
+      fuentesAdicionales: fuentesUsadas,
+    };
+  }
+
+  // 8. INTENCIÓN: Ficha y Especificaciones Generales
   if (
     normMsg.includes("especific") ||
     normMsg.includes("ficha") ||
     normMsg.includes("specs") ||
     normMsg.includes("datos del equipo") ||
     normMsg.includes("capacidad y peso") ||
-    normMsg.includes("potencia")
+    normMsg.includes("cuanto pesa") ||
+    normMsg.includes("peso operativo") ||
+    normMsg.includes("cuanto carga") ||
+    normMsg.includes("capacidad de carga") ||
+    normMsg.includes("horometro")
   ) {
-    let msg = `🤖 **Asistente TAGSENSE · Ficha y Especificaciones**\n\n`;
-    msg += `Especificaciones técnicas oficiales de **${nombreEquipo}${modeloStr}**:\n\n`;
+    let msg = `📋 **Asistente TAGSENSE · Ficha y Especificaciones Oficiales**\n\n`;
+    msg += `Datos técnicos maestros de **${nombreEquipo}${modeloStr}**:\n\n`;
     msg += `• **Modelo / Fabricante:** ${asset.model || nombreEquipo} (${asset.manufacturer || "OEM"})\n`;
     msg += `• **Motorización OEM:** ${specs.engine_type || "Estándar"} · Potencia: ${specs.power || "Nominal"}\n`;
     msg += `• **Capacidad de Carga:** ${specs.load_capacity || "Según diseño OEM"} · Peso op.: ${specs.operating_weight || "Nominal"}\n`;
-    msg += `• **Horómetro Acumulado:** ${asset.hour_meter || "No registrado"} · Estado: ${asset.status || "Operativo"}\n\n`;
-    msg += `¿Qué deseas realizar a continuación?`;
+    msg += `• **Horómetro Acumulado:** ${asset.hour_meter || "No registrado"} · Estado: ${asset.status || "Operativo"}\n`;
+    if (asset.serial_number) msg += `• **Número de Serie:** ${asset.serial_number}\n`;
+    if (asset.location) msg += `• **Ubicación en Faena:** ${asset.location}\n`;
+    msg += `\n¿Qué deseas consultar a continuación?`;
 
     return {
       message: msg,
       alternativas: [
-        "Procedimientos de inspección",
-        "Puntos de engrase y fluidos",
-        "Consultar otro componente",
+        "🛢️ Puntos de engrase y fluidos",
+        "🔍 Diagnosticar un componente",
+        "🔄 Cambiar de componente",
       ],
       fuentesAdicionales: fuentesUsadas,
     };
   }
 
-  // 3. INTENCIÓN: Puntos de engrase y fluidos
+  // 9. INTENCIÓN: Puntos de Engrase y Fluidos / Consulta de Capacidades
   if (
     normMsg.includes("engrase") ||
     normMsg.includes("fluido") ||
     normMsg.includes("lubricac") ||
-    normMsg.includes("aceite")
+    normMsg.includes("aceite") ||
+    normMsg.includes("grasa") ||
+    normMsg.includes("refrigerante")
   ) {
-    let msg = `🛢️ **Asistente TAGSENSE · Puntos de Engrase y Fluidos**\n\n`;
-    msg += `Pautas de lubricación y niveles recomendados para **${nombreEquipo}${modeloStr}**:\n\n`;
-    msg += `• **Aceite de Motor:** 15W-40 CK-4 — Comprobar nivel con varilla en motor apagado y piso plano.\n`;
-    msg += `• **Circuito Hidráulico:** Fluido ISO VG 46/68 — Mirilla en estanque con cilindros retraídos.\n`;
-    msg += `• **Grasa de Chasis y Tolva:** Grasa de litio NLGI 2 EP en graseras de bujes y articulaciones.\n`;
-    msg += `• **Refrigerante:** OAT 50/50 — Nivel entre marcas MIN y MAX en vaso de expansión.\n\n`;
-    msg += `¿Deseas verificar un punto en terreno o registrar la mantención?`;
+    let compEspecifico = categorySlug;
+    if (!compEspecifico) {
+      if (normMsg.includes("motor")) compEspecifico = "motor";
+      else if (normMsg.includes("hidraul")) compEspecifico = "hidraulico";
+      else if (normMsg.includes("transmis") || normMsg.includes("eje")) compEspecifico = "ejes";
+      else if (normMsg.includes("freno")) compEspecifico = "frenos";
+      else if (normMsg.includes("tolva")) compEspecifico = "tolva";
+    }
 
-    return {
-      message: msg,
-      alternativas: [
-        "Inspeccionar nivel hidráulico",
-        "Procedimiento de lubricación",
-        "Registrar hallazgo en informe",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 4. INTENCIÓN: Procedimientos de inspección general
-  if (normMsg.includes("procedimiento") && !normMsg.includes("tolva") && !normMsg.includes("freno")) {
-    let msg = `🔍 **Asistente TAGSENSE · Procedimientos de Inspección**\n\n`;
-    msg += `Protocolo de inspección técnica para **${nombreEquipo}${modeloStr}**:\n\n`;
-    msg += `1. **Seguridad previa (LOTO):** Estacionar en piso plano, colocar cuñas y aplicar freno de parqueo.\n`;
-    msg += `2. **Inspección de 360°:** Verificar ausencia de fugas activas en mangueras, acoples y estado de neumáticos/chasis.\n`;
-    msg += `3. **Comprobación de cabina:** Testigos de advertencia, horómetro y presiones de corte en manómetros del tablero.\n\n`;
-    msg += `¿Sobre cuál de estos sistemas deseas profundizar?`;
-
-    return {
-      message: msg,
-      alternativas: [
-        "Inspeccionar tolva y levante",
-        "Inspeccionar sistema de frenos",
-        "Inspeccionar circuito hidráulico",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 5. INTENCIÓN: Registrar hallazgo / Generar informe
-  if (
-    normMsg.includes("registrar hallazgo") ||
-    normMsg.includes("generar informe") ||
-    normMsg.includes("abrir informe") ||
-    normMsg.includes("formulario de informe")
-  ) {
-    return {
-      message: `📝 **Asistente TAGSENSE · Registro en Informe**\n\nHe preparado el hallazgo técnico para el informe de mantenimiento de **${nombreEquipo}${modeloStr}**.\n\nPuedes presionar **Abrir Formulario de Informe** para adjuntar fotografías, detalle de la intervención y firma:`,
-      alternativas: [
-        "Abrir Formulario de Informe",
-        "Consultar otro componente",
-        "Escalar a supervisor",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 6. INTENCIÓN: Síntomas específicos ya seleccionados por el técnico
-  // TOLVA
-  if (normMsg.includes("no sube") || normMsg.includes("no levanta") || normMsg.includes("sube muy lenta") || normMsg.includes("sube lenta")) {
-    let msg = `🔧 **Asistente TAGSENSE · Diagnóstico de Tolva**\n\n`;
-    msg += `Procedimiento para **Tolva no sube o sube lenta** en **${nombreEquipo}**:\n\n`;
-    msg += `1. **Seguridad:** Ubica el equipo en terreno nivelado con despeje aéreo vertical de al menos 8 metros.\n`;
-    msg += `2. **Nivel de fluido:** Revisa la mirilla del depósito hidráulico con cilindros abajo y motor apagado.\n`;
-    msg += `3. **Presión de levante:** Conecta manómetro en puerto TP de volteo. Acelera a 1.800 RPM y acciona la palanca. La presión nominal debe alcanzar **210 bar (3.000 psi)**.\n`;
-    msg += `4. **Válvula de alivio:** Si la presión no supera 140 bar, la válvula de alivio del banco de tolva puede estar trabada abierta.\n\n`;
-    msg += `¿Cuál fue la lectura observada en la comprobación?`;
-
-    return {
-      message: msg,
-      alternativas: [
-        "Presión dentro de rango (210 bar)",
-        "Presión baja (< 160 bar)",
-        "Fuga visible en mangueras",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (normMsg.includes("no baja") || normMsg.includes("no desciende") || normMsg.includes("cae con golpe") || normMsg.includes("desciende con golpe")) {
-    let msg = `🔧 **Asistente TAGSENSE · Diagnóstico de Tolva**\n\n`;
-    msg += `Procedimiento para **Tolva no baja o desciende bruscamente** en **${nombreEquipo}**:\n\n`;
-    msg += `1. **Traba de seguridad:** Coloca la traba mecánica de seguridad de tolva antes de inspeccionar bajo el chasis.\n`;
-    msg += `2. **Válvula de descenso:** Revisa la bobina solenoide de bajada y el cableado del mando en cabina.\n`;
-    msg += `3. **Holding Valve:** Comprueba que la válvula de contrabalance o amortiguación de fin de carrera no esté obstruida.\n\n`;
-    msg += `¿Cuál fue el resultado de la inspección?`;
-
-    return {
-      message: msg,
-      alternativas: [
-        "Solenoide o mando eléctrico dañado",
-        "Obstrucción en válvula hidráulica",
-        "Registrar hallazgo en informe",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (normMsg.includes("fuga en cilindro") || (normMsg.includes("fuga") && normMsg.includes("tolva"))) {
-    let msg = `🔧 **Asistente TAGSENSE · Diagnóstico de Fugas en Tolva**\n\n`;
-    msg += `Protocolo de inspección para **Fuga en cilindros o mangueras de tolva** en **${nombreEquipo}**:\n\n`;
-    msg += `1. **Despresurización:** Apaga el motor y mueve el joystick en todas direcciones para despresurizar el circuito.\n`;
-    msg += `2. **Inspección de sellos:** Limpia el vástago del cilindro telescópico y observa si hay rayaduras o fuga por el retén rascador.\n`;
-    msg += `3. **Acoples:** Verifica el torque de racores y mangueras de alta presión buscando dilataciones o fisuras.\n\n`;
-    msg += `¿Qué condición encontraste?`;
-
-    return {
-      message: msg,
-      alternativas: [
-        "Sello de vástago con fuga activa",
-        "Manguera con abrasión o fisura",
-        "Sin fugas tras reapriete",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // FRENOS
-  if (normMsg.includes("esponjoso") || (normMsg.includes("presion") && normMsg.includes("freno"))) {
-    let msg = `🛑 **Asistente TAGSENSE · Diagnóstico de Frenos**\n\n`;
-    msg += `Procedimiento para **Pedal esponjoso o baja presión de frenado** en **${nombreEquipo}**:\n\n`;
-    msg += `1. **Acumuladores:** Revisa la presión de precarga en los acumuladores de nitrógeno (mínimo 90 bar).\n`;
-    msg += `2. **Purga de aire:** Realiza purga de aire en los purgadores de cada rueda comenzando por el eje posterior.\n`;
-    msg += `3. **Válvula moduladora:** Comprueba que no exista retorno excesivo al estanque al pisar el freno.\n\n`;
-    msg += `¿Qué resultado arrojó la verificación de frenos?`;
-
-    return {
-      message: msg,
-      alternativas: [
-        "Aire en circuito purgado con éxito",
-        "Baja precarga en acumulador",
-        "Registrar hallazgo en informe",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 7. INTENCIÓN: Resultado de prueba guiada
-  if (
-    normMsg.includes("dentro de rango") ||
-    normMsg.includes("presion baja") ||
-    normMsg.includes("fuga visible") ||
-    normMsg.includes("solenoide") ||
-    normMsg.includes("obstruccion") ||
-    normMsg.includes("sello de vastago") ||
-    normMsg.includes("manguera con") ||
-    normMsg.includes("sin fugas") ||
-    normMsg.includes("aire en circuito") ||
-    normMsg.includes("baja precarga") ||
-    normMsg.includes("anomalia confirmada")
-  ) {
-    return {
-      message: `📋 **Asistente TAGSENSE · Registro de Diagnóstico**\n\nEntendido. He incorporado el hallazgo (**${message}**) a la sesión de trabajo para **${nombreEquipo}${modeloStr}**.\n\nPara cerrar el ciclo de mantenimiento, puedes registrar formalmente el informe o continuar con la revisión de otro componente:`,
-      alternativas: [
-        "Registrar hallazgo en informe",
-        "Consultar otro componente",
-        "Escalar a supervisor",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 8. INTENCIÓN: Reporte inicial de falla por sistema (Tolva, Frenos, Hidráulico, etc.)
-  let sistema = categorySlug;
-  if (!sistema) {
-    if (normMsg.includes("tolva") || normMsg.includes("volteo") || normMsg.includes("levante")) sistema = "tolva";
-    else if (normMsg.includes("freno")) sistema = "frenos";
-    else if (normMsg.includes("hidraul") || normMsg.includes("bomba")) sistema = "hidraulico";
-    else if (normMsg.includes("temperatura") || normMsg.includes("motor") || normMsg.includes("calor") || normMsg.includes("refrigerante")) sistema = "temperatura";
-    else if (normMsg.includes("direccion") || normMsg.includes("volante") || normMsg.includes("giro")) sistema = "direccion";
-    else if (normMsg.includes("electr") || normMsg.includes("bateria") || normMsg.includes("arranque")) sistema = "electrico";
-    else if (normMsg.includes("sensor") || normMsg.includes("codigo") || normMsg.includes("alerta")) sistema = "sensores";
-  }
-
-  // Prioridad: si este sistema tiene tags de fallas guardados en la ficha técnica
-  if (sistema) {
-    const fichaFallas = fichasSistemas.find(
-      (item) => item.category_slug === sistema && item.field_type_slug === "fallas"
-    );
-    const fichaEquip = fichasSistemas.find(
-      (item) => item.category_slug === sistema && item.field_type_slug === "equipamiento"
-    );
-
-    if (fichaFallas && fichaFallas.content) {
-      const tagsFallas = fichaFallas.content
-        .split(/\n|•/)
-        .map((s) => s.trim().replace(/^[\s\-*•\d.]+/, "").trim())
-        .filter((s) => s.length > 2)
-        .map((line) => {
-          const colonIdx = line.indexOf(":");
-          if (colonIdx > 0 && colonIdx <= 45) return line.substring(0, colonIdx).trim();
-          const dashIdx = line.search(/\s+[—–-]\s+/);
-          if (dashIdx > 0 && dashIdx <= 45) return line.substring(0, dashIdx).trim();
-          return line.slice(0, 32).trim();
-        });
-
-      if (tagsFallas.length > 0) {
-        let msg = `🤖 **Asistente TAGSENSE · Diagnóstico de ${sistema.toUpperCase()}**\n\n`;
-        msg += `He analizado la ficha técnica y documentación oficial de **${nombreEquipo}${modeloStr}** para **${sistema.toUpperCase()}**:\n\n`;
-        if (fichaEquip && fichaEquip.content) {
-          const primerParam = fichaEquip.content.split(/\n|•/).find((l) => l.trim().length > 4);
-          if (primerParam) {
-            msg += `• **Parámetro técnico de referencia:** ${primerParam.trim().replace(/^[\s\-*•]+/, "")}\n\n`;
+    const fluidosEncontrados: { comp: string; tag: TagItem }[] = [];
+    fichasSistemas.forEach((f) => {
+      if (f.field_type_slug === "equipamiento" && f.content && f.category_slug) {
+        const tags = parseFichaTags(f.content);
+        tags.forEach((t) => {
+          const tNorm = normalizarTexto(t.title + " " + t.detail);
+          if (
+            tNorm.includes("aceite") ||
+            tNorm.includes("fluido") ||
+            tNorm.includes("refrigerante") ||
+            tNorm.includes("grasa") ||
+            tNorm.includes("capacidad") ||
+            tNorm.includes("litro") ||
+            tNorm.includes("galon")
+          ) {
+            fluidosEncontrados.push({ comp: f.category_slug || "", tag: t });
           }
-        }
-        msg += `¿Cuál de las siguientes condiciones o síntomas detectas en el equipo?`;
+        });
+      }
+    });
+
+    if (compEspecifico) {
+      const nomC = getNombreComp(compEspecifico);
+      const iconoC = ICONOS_COMPONENTES[compEspecifico] || "⚙️";
+      const fluidosComp = fluidosEncontrados.filter((f) => f.comp === compEspecifico);
+
+      if (fluidosComp.length > 0) {
+        let msg = `${iconoC} **Especificación de Fluidos · ${nomC}**\n\n`;
+        msg += `Datos registrados en la ficha técnica de **${nombreEquipo}${modeloStr}**:\n\n`;
+        fluidosComp.forEach((item) => {
+          msg += `• **${item.tag.title}:** ${item.tag.detail || "Verificado en ficha OEM"}\n`;
+        });
+        msg += `\n¿Deseas verificar más especificaciones o revisar otro componente?`;
+
         return {
           message: msg,
           alternativas: [
-            ...tagsFallas.slice(0, 3).map((t) => (t.length > 32 ? t.substring(0, 30) + "…" : t)),
-            "Procedimientos de inspección",
+            "📋 Ver Ficha Técnica",
+            `🔧 Diagnosticar ${nomC.slice(0, 18)}`,
+            "🔄 Cambiar de componente",
+          ],
+          fuentesAdicionales: fuentesUsadas,
+        };
+      } else {
+        const paramStr = compEspecifico === "motor" ? "la capacidad de aceite de motor" : `la especificación de aceite o fluidos de ${nomC}`;
+        const msg = `En la ficha técnica de ${nombreEquipo} no está registrada ${paramStr}.`;
+
+        return {
+          message: msg,
+          alternativas: getBotonesComponentes(),
+          fuentesAdicionales: fuentesUsadas,
+        };
+      }
+    }
+
+    if (fluidosEncontrados.length > 0) {
+      let msg = `🛢️ **Asistente TAGSENSE · Puntos de Engrase y Fluidos**\n\n`;
+      msg += `Capacidades y pautas de lubricación registradas para **${nombreEquipo}${modeloStr}**:\n\n`;
+      fluidosEncontrados.slice(0, 6).forEach((item) => {
+        msg += `• **${getNombreComp(item.comp)} · ${item.tag.title}:** ${item.tag.detail}\n`;
+      });
+      msg += `\n¿Deseas consultar algún componente en específico o volver a la ficha?`;
+
+      return {
+        message: msg,
+        alternativas: getBotonesComponentes(),
+        fuentesAdicionales: fuentesUsadas,
+      };
+    } else {
+      const msg = `En la ficha técnica de ${nombreEquipo} no está registrada la capacidad de aceite de motor ni especificaciones de fluidos.`;
+
+      return {
+        message: msg,
+        alternativas: getBotonesComponentes(),
+        fuentesAdicionales: fuentesUsadas,
+      };
+    }
+  }
+
+  // 10. INTENCIÓN: Procedimientos Técnicos Paso a Paso (Informativo / Guiado)
+  const esConsultaProcedimiento =
+    /\b(como se|como medir|como purgar|como cambiar|como regular|como verificar|procedimiento|pasos para|protocolo de)\b/i.test(normMsg);
+
+  if (esConsultaProcedimiento) {
+    let compProc = categorySlug;
+    if (!compProc) {
+      for (const slug of Object.keys(ICONOS_COMPONENTES)) {
+        if (normMsg.includes(slug) || normMsg.includes(getNombreComp(slug).toLowerCase())) {
+          compProc = slug;
+          break;
+        }
+      }
+    }
+
+    const fichasProc = fichasSistemas.filter((f) => f.field_type_slug === "procedimientos");
+    for (const fProc of fichasProc) {
+      if (fProc.content && (!compProc || fProc.category_slug === compProc)) {
+        const tags = parseFichaTags(fProc.content);
+        const matchProc = tags.find((t) => {
+          const tNorm = normalizarTexto(t.title);
+          return keywords.some((kw) => tNorm.includes(kw));
+        });
+
+        if (matchProc && fProc.category_slug) {
+          const nomComp = getNombreComp(fProc.category_slug);
+          const iconoComp = ICONOS_COMPONENTES[fProc.category_slug] || "🔧";
+          let msg = `${iconoComp} **Procedimiento Técnico · ${matchProc.title}**\n\n`;
+          msg += `Pauta oficial de mantenimiento para **${nombreEquipo}${modeloStr}** (${nomComp}):\n\n`;
+          msg += `• **Instrucción:** ${matchProc.detail || "Seguir protocolo de taller OEM."}\n\n`;
+          msg += `¿Pudiste ejecutar el procedimiento en faena o requieres apoyo adicional?`;
+
+          return {
+            message: msg,
+            alternativas: [
+              "✅ Procedimiento completado",
+              "⚠️ Falla confirmada (generar informe)",
+              "🔄 Cambiar de componente",
+            ],
+            fuentesAdicionales: fuentesUsadas,
+          };
+        }
+      }
+    }
+  }
+
+  // 11. INTENCIÓN: Coincidencia con Falla Específica del Activo
+  const fichasFallasOrdenadas = categorySlug
+    ? [
+        ...fichasSistemas.filter((f) => f.category_slug === categorySlug && f.field_type_slug === "fallas"),
+        ...fichasSistemas.filter((f) => f.category_slug !== categorySlug && f.field_type_slug === "fallas"),
+      ]
+    : fichasSistemas.filter((f) => f.field_type_slug === "fallas");
+
+  for (const fichaFalla of fichasFallasOrdenadas) {
+    if (fichaFalla.content && fichaFalla.category_slug) {
+      const tagsFallas = parseFichaTags(fichaFalla.content);
+      const catSlug = fichaFalla.category_slug;
+      const nomComp = getNombreComp(catSlug);
+      const iconoComp = ICONOS_COMPONENTES[catSlug] || "🔧";
+
+      const msgLimpio = normMsg.replace(/^\d+[\.\)\s\-]+/, "").trim();
+
+      const fallaMatch = tagsFallas.find((tf) => {
+        const titleNorm = normalizarTexto(tf.title);
+        if (msgLimpio === titleNorm || msgLimpio.includes(titleNorm) || titleNorm.includes(msgLimpio)) {
+          return true;
+        }
+        const wordsTitle = titleNorm.split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !STOPWORDS_PREGUNTA.has(w));
+        const wordsMsg = msgLimpio.split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !STOPWORDS_PREGUNTA.has(w));
+        const intersect = wordsTitle.filter((w) => wordsMsg.includes(w));
+        return intersect.length >= 2;
+      });
+
+      if (fallaMatch) {
+        if (!fuentesUsadas.includes(fichaFalla.title)) fuentesUsadas.push(fichaFalla.title);
+
+        const fichaProc = fichasSistemas.find(
+          (f) => f.category_slug === catSlug && f.field_type_slug === "procedimientos"
+        );
+        const fichaEquip = fichasSistemas.find(
+          (f) => f.category_slug === catSlug && f.field_type_slug === "equipamiento"
+        );
+
+        const tagsProc = fichaProc && fichaProc.content ? parseFichaTags(fichaProc.content) : [];
+        const tagsEquip = fichaEquip && fichaEquip.content ? parseFichaTags(fichaEquip.content) : [];
+
+        let msg = `${iconoComp} **Protocolo de Verificación · ${fallaMatch.title}**\n\n`;
+        msg += `**Sistema:** ${nomComp} · **Equipo:** ${nombreEquipo}${modeloStr}\n\n`;
+
+        if (fallaMatch.detail) {
+          msg += `**Criterio Técnico / Causa Raíz:**\n• ${fallaMatch.detail}\n\n`;
+        }
+
+        if (tagsEquip.length > 0) {
+          msg += `**Parámetros Nominales de Referencia (OEM):**\n`;
+          tagsEquip.slice(0, 3).forEach((eq) => {
+            msg += eq.detail ? `• **${eq.title}:** ${eq.detail}\n` : `• ${eq.title}\n`;
+          });
+          msg += `\n`;
+        }
+
+        if (tagsProc.length > 0) {
+          msg += `**Procedimiento de Comprobación en Terreno:**\n`;
+          tagsProc.slice(0, 4).forEach((pr, idx) => {
+            msg += `${idx + 1}. **${pr.title}:** ${pr.detail || "Verificar condición física y funcional."}\n`;
+          });
+          msg += `\n¿Pudiste normalizar la condición en terreno o la anomalía queda confirmada?`;
+        } else {
+          msg += `**Procedimiento de Inspección en Faena:**\n`;
+          msg += `1. **Seguridad (LOTO):** Estacionar en superficie plana, aplicar cuñas y bloquear energías.\n`;
+          msg += `2. **Inspección Física:** Verificar ausencia de fugas, conectores sueltos o daños estructurales.\n`;
+          msg += `3. **Prueba Funcional:** Medir parámetro con instrumento calibrado y comparar con tolerancia OEM.\n\n`;
+          msg += `¿Pudiste corregir el problema en terreno o la anomalía queda confirmada?`;
+        }
+
+        const otraFallaOpcion = `🔍 Otra falla de ${nomComp.slice(0, 16)}`;
+        return {
+          message: msg,
+          alternativas: [
+            "✅ Falla corregida en terreno",
+            "⚠️ Falla confirmada (generar informe)",
+            otraFallaOpcion,
+            "🔄 Cambiar de componente",
           ],
           fuentesAdicionales: fuentesUsadas,
         };
@@ -737,92 +988,151 @@ function construirRespuestaBotInteligente(
     }
   }
 
-  if (sistema === "tolva") {
-    const nota = buscarNotaFicha("tolva") || "Cilindros de volteo de doble efecto conectados al circuito hidráulico principal.";
+  // 12. INTENCIÓN: Detección de Componente Seleccionado (Modo Neutral vs. Modo Avería)
+  let detectedSlug = categorySlug;
+  if (!detectedSlug) {
+    for (const slug of Object.keys(ICONOS_COMPONENTES)) {
+      const nom = getNombreComp(slug).toLowerCase();
+      if (normMsg.includes(slug) || normMsg.includes(nom)) {
+        detectedSlug = slug;
+        break;
+      }
+    }
+    if (!detectedSlug) {
+      if (normMsg.includes("freno") || normMsg.includes("retardo")) detectedSlug = "frenos";
+      else if (normMsg.includes("hidraul") || normMsg.includes("bomba")) detectedSlug = "hidraulico";
+      else if (normMsg.includes("tolva") || normMsg.includes("volteo") || normMsg.includes("levante")) detectedSlug = "tolva";
+      else if (normMsg.includes("motor") || normMsg.includes("combustible") || normMsg.includes("inyector")) detectedSlug = "motor";
+      else if (normMsg.includes("direccion") || normMsg.includes("giro") || normMsg.includes("articulac")) detectedSlug = "direccion";
+      else if (normMsg.includes("eje") || normMsg.includes("transmision") || normMsg.includes("convertidor")) detectedSlug = "ejes";
+      else if (normMsg.includes("temperatura") || normMsg.includes("calor") || normMsg.includes("refrigerac")) detectedSlug = "temperatura";
+      else if (normMsg.includes("electr") || normMsg.includes("bateria") || normMsg.includes("arranque")) detectedSlug = "electrico";
+      else if (normMsg.includes("suspens") || normMsg.includes("chasis") || normMsg.includes("amortiguad")) detectedSlug = "suspension";
+      else if (normMsg.includes("neumatic") || normMsg.includes("llanta") || normMsg.includes("presion rueda")) detectedSlug = "neumaticos";
+      else if (normMsg.includes("sensor") || normMsg.includes("alerta") || normMsg.includes("codigo") || normMsg.includes("pantalla")) detectedSlug = "sensores";
+    }
+  }
+
+  if (detectedSlug) {
+    const nomComp = getNombreComp(detectedSlug);
+    const iconoComp = ICONOS_COMPONENTES[detectedSlug] || "🔧";
+
+    const fichaFalla = fichasSistemas.find(
+      (f) => f.category_slug === detectedSlug && f.field_type_slug === "fallas"
+    );
+    const fichaEquip = fichasSistemas.find(
+      (f) => f.category_slug === detectedSlug && f.field_type_slug === "equipamiento"
+    );
+
+    const tagsFallas = fichaFalla && fichaFalla.content ? parseFichaTags(fichaFalla.content) : [];
+    const tagsEquip = fichaEquip && fichaEquip.content ? parseFichaTags(fichaEquip.content) : [];
+
+    if (fichaFalla && !fuentesUsadas.includes(fichaFalla.title)) fuentesUsadas.push(fichaFalla.title);
+    if (fichaEquip && !fuentesUsadas.includes(fichaEquip.title)) fuentesUsadas.push(fichaEquip.title);
+
+    const quiereDiagnosticarFalla =
+      /\b(falla|problema|anomalia|sintoma|ruido|fuga|temperatura|calienta|humo|vibracion|no frena|no levanta|no gira|no arranca|alerta|codigo|dañado|roto|averia|presion baja|alta temperatura)\b/i.test(normMsg) ||
+      /^\d+[\.\)]/.test(normMsg.trim()) ||
+      normMsg.startsWith("tengo una falla");
+
+    if (quiereDiagnosticarFalla) {
+      let msg = `${iconoComp} **Diagnóstico Técnico · ${nomComp}**\n\n`;
+      msg += `Parámetros técnicos oficiales de **${nombreEquipo}${modeloStr}** para **${nomComp.toUpperCase()}**:\n\n`;
+
+      if (tagsEquip.length > 0) {
+        tagsEquip.slice(0, 3).forEach((eq) => {
+          msg += eq.detail ? `• **${eq.title}:** ${eq.detail}\n` : `• ${eq.title}\n`;
+        });
+        msg += `\n`;
+      }
+
+      msg += `Selecciona el síntoma observado o la condición anómala para iniciar la comprobación en terreno:`;
+
+      const alternativasFallas = tagsFallas.length > 0
+        ? tagsFallas.slice(0, 4).map((t, i) => `${i + 1}. ${t.title.length > 28 ? t.title.slice(0, 26) + "…" : t.title}`)
+        : [
+            `1. Pérdida de rendimiento en ${detectedSlug}`,
+            `2. Ruido o vibración anómala`,
+            `3. Fuga de fluido en ${detectedSlug}`,
+          ];
+
+      return {
+        message: msg,
+        alternativas: [
+          ...alternativasFallas,
+          "🔄 Cambiar de componente",
+        ],
+        fuentesAdicionales: fuentesUsadas,
+      };
+    } else {
+      // Modo informativo / presentación neutral del componente (no asume avería)
+      let msg = `${iconoComp} **Sistema: ${nomComp}**\n\n`;
+      msg += `Parámetros y equipamiento registrado en **${nombreEquipo}${modeloStr}**:\n\n`;
+
+      if (tagsEquip.length > 0) {
+        tagsEquip.slice(0, 4).forEach((eq) => {
+          msg += eq.detail ? `• **${eq.title}:** ${eq.detail}\n` : `• ${eq.title}\n`;
+        });
+        msg += `\n`;
+      }
+
+      msg += `¿Qué deseas realizar o consultar en este sistema?`;
+
+      const opciones: string[] = [
+        `🔍 Diagnosticar una anomalía`,
+      ];
+      if (tagsEquip.some((t) => /aceite|fluido|refrigerante|grasa/i.test(t.title + " " + t.detail))) {
+        opciones.push(`🛢️ Fluidos de ${nomComp.slice(0, 18)}`);
+      } else {
+        opciones.push(`📋 Ver Ficha Técnica`);
+      }
+      opciones.push(`🔄 Cambiar de componente`);
+
+      return {
+        message: msg,
+        alternativas: opciones,
+        fuentesAdicionales: fuentesUsadas,
+      };
+    }
+  }
+
+  // 13. INTENCIÓN: Búsqueda libre en los tags de todas las fichas
+  let mejorMatchTag: TagItem | null = null;
+  let mejorCatSlug: string | null = null;
+  let maxScore = 0;
+
+  fichasSistemas.forEach((f) => {
+    if (f.content && f.category_slug) {
+      const tags = parseFichaTags(f.content);
+      tags.forEach((t) => {
+        const fullText = normalizarTexto(t.title + " " + t.detail);
+        const score = contarCoincidencias(fullText, keywords);
+        if (score > maxScore) {
+          maxScore = score;
+          mejorMatchTag = t;
+          mejorCatSlug = f.category_slug;
+        }
+      });
+    }
+  });
+
+  if (mejorMatchTag && mejorCatSlug && maxScore >= 2) {
+    const nomComp = getNombreComp(mejorCatSlug);
     return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico de Tolva**\n\nHe analizado la documentación técnica de **${nombreEquipo}${modeloStr}** para **TOLVA Y VOLTEO**:\n\n• ${nota}\n\nPara orientarte con precisión, ¿cuál es el síntoma principal que presenta la tolva?`,
+      message: `🔍 **Especificación Técnica Encontrada**\n\nEn la ficha de **${nomComp}** para **${nombreEquipo}${modeloStr}**:\n\n• **${(mejorMatchTag as TagItem).title}:** ${(mejorMatchTag as TagItem).detail || "Verificado en ficha técnica OEM."}\n\n¿Deseas iniciar el diagnóstico de este componente o ver otros sistemas?`,
       alternativas: [
-        "Tolva no sube o sube muy lenta",
-        "Tolva no baja o desciende con golpe",
-        "Fuga en cilindros de levante",
+        `🔧 Diagnosticar ${nomComp.slice(0, 20)}`,
+        "📋 Ver especificaciones",
+        "🔄 Cambiar de componente",
       ],
       fuentesAdicionales: fuentesUsadas,
     };
   }
 
-  if (sistema === "frenos") {
-    const nota = buscarNotaFicha("frenos") || "Frenos de servicio: Discos húmedos enfriados por aceite forzado en todos los ejes con circuito doble independiente.";
-    return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico de Frenos**\n\nHe analizado los parámetros oficiales de **${nombreEquipo}${modeloStr}** para **FRENOS**:\n\n• ${nota}\n\n¿Cuál es el síntoma principal que presenta el sistema de frenos?`,
-      alternativas: [
-        "Pedal esponjoso o baja presión",
-        "Sobrecalentamiento o bloqueo",
-        "Freno de parqueo no libera / no retiene",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (sistema === "hidraulico") {
-    const nota = buscarNotaFicha("hidraulico") || "Circuito hidráulico central con bombas de caudal variable y válvulas de alivio proporcionales.";
-    return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico Hidráulico**\n\nHe analizado la ficha de **${nombreEquipo}${modeloStr}** para **SISTEMA HIDRÁULICO**:\n\n• ${nota}\n\n¿Cuál es la anomalía principal observada?`,
-      alternativas: [
-        "Baja presión de trabajo general",
-        "Ruido o cavitación en bomba",
-        "Fuga en mangueras o estanque",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (sistema === "temperatura") {
-    const nota = buscarNotaFicha("temperatura") || "Circuito de refrigeración forzada para motor con termostato regulado y enfriador de aceite.";
-    return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico de Temperatura**\n\nHe analizado los datos de **${nombreEquipo}${modeloStr}** para **TEMPERATURA Y MOTOR**:\n\n• ${nota}\n\n¿Cuál es la falla o alerta detectada?`,
-      alternativas: [
-        "Temperatura sobre 105°C en motor",
-        "Nivel bajo de refrigerante o fuga",
-        "Alerta de baja presión de aceite",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (sistema === "direccion") {
-    const nota = buscarNotaFicha("direccion") || "Dirección hidromecánica articulada con sistema secundario de emergencia según norma ISO 5010.";
-    return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico de Dirección**\n\nHe analizado los parámetros de **${nombreEquipo}${modeloStr}** para **DIRECCIÓN Y ARTICULACIÓN**:\n\n• ${nota}\n\n¿Cuál es el problema que presenta la dirección?`,
-      alternativas: [
-        "Dirección pesada / giro lento",
-        "Juego excesivo en pasadores de giro",
-        "Alerta dirección de emergencia",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  if (sistema === "electrico") {
-    const nota = buscarNotaFicha("electrico") || "Sistema eléctrico 24V con interruptor maestro LOTO, baterías de servicio y alternador de 28V.";
-    return {
-      message: `🤖 **Asistente TAGSENSE · Diagnóstico Eléctrico**\n\nHe analizado los datos de **${nombreEquipo}${modeloStr}** para **SISTEMA ELÉCTRICO**:\n\n• ${nota}\n\n¿Cuál es el síntoma observado?`,
-      alternativas: [
-        "Equipo no da arranque / batería baja",
-        "Códigos de falla en display",
-        "Falla en luces o alternador",
-      ],
-      fuentesAdicionales: fuentesUsadas,
-    };
-  }
-
-  // 9. FALLBACK GENERAL CONTEXTUAL
+  // 14. FALLBACK GENERAL CONTEXTUAL
   return {
-    message: `🤖 **Asistente TAGSENSE · Diagnóstico Técnico**\n\nHe consultado la ficha y manuales de **${nombreEquipo}${modeloStr}**.\n\nPara orientarte de forma ordenada, selecciona una de las siguientes opciones:`,
-    alternativas: [
-      "📋 Especificaciones Técnicas",
-      "Procedimientos de inspección",
-      "Consultar otro componente",
-    ],
+    message: `🤖 **Asistente TAGSENSE · Diagnóstico por Componente**\n\nHe consultado la ficha técnica oficial de **${nombreEquipo}${modeloStr}**.\n\nPara orientarte con máxima precisión en terreno, selecciona el componente que deseas revisar o diagnosticar:`,
+    alternativas: getBotonesComponentes(),
     fuentesAdicionales: fuentesUsadas,
   };
 }

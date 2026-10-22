@@ -216,7 +216,14 @@ export function ActivosTable({ assets }: { assets: AssetListItem[] }) {
                         <Link href={`/admin/assets/${asset.id}`} className="activos-item-link">
                           <div className="activos-item-thumb">
                             {asset.photo_url ? (
-                              <img src={asset.photo_url} alt={asset.name} />
+                              <img
+                                src={asset.photo_url}
+                                alt={asset.name}
+                                loading="lazy"
+                                decoding="async"
+                                width={44}
+                                height={44}
+                              />
                             ) : (
                               <span className="activos-thumb-placeholder">🚜</span>
                             )}

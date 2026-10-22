@@ -18,7 +18,7 @@
 <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="icon" href="assets/icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="assets/css/styles.css?v=8">
 </head>
 <body>
 <div class="toast-notification" id="toast-notification" role="status" aria-live="polite"></div>
@@ -416,7 +416,7 @@
       <img class="truck-photo" alt="Camión Minero MT65S" loading="lazy">
     </div>
 
-    <div class="list-card" id="historial-list">
+    <div id="historial-list">
       <p class="historial-status" id="historial-status">Cargando historial…</p>
     </div>
   </div>
@@ -698,6 +698,53 @@
     </button>
   </div>
 
+  <!-- MENÚ INFERIOR FIJO (APP BOTTOM NAVIGATION) -->
+  <nav class="app-bottom-nav" id="app-bottom-nav" aria-label="Navegación principal">
+    <button class="nav-item active" id="nav-btn-read" type="button" data-nav-tab="read" aria-label="Modo lectura y escaneo">
+      <div class="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="nav-label">Escanear</span>
+    </button>
+
+    <button class="nav-item" id="nav-btn-ficha" type="button" data-nav-tab="ficha" aria-label="Ficha técnica del equipo">
+      <div class="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2"/>
+          <circle cx="8" cy="10" r="2" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M13 9h5M13 13h5M6 16h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="nav-label">Ficha</span>
+    </button>
+
+    <button class="nav-item" id="nav-btn-asistente" type="button" data-nav-tab="asistente" aria-label="Asistente técnico con IA">
+      <div class="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <circle cx="9" cy="13" r="1.3" fill="currentColor"/>
+          <circle cx="15" cy="13" r="1.3" fill="currentColor"/>
+          <path d="M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="nav-label">Asistente</span>
+    </button>
+
+    <button class="nav-item" id="nav-btn-informe" type="button" data-nav-tab="informe" aria-label="Generar informe de mantenimiento">
+      <div class="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M9 14l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="nav-label">Informe</span>
+    </button>
+  </nav>
+
 </div>
 
 <div class="qr-overlay hidden" id="qr-overlay" role="dialog" aria-modal="true" aria-label="Escáner de código QR">
@@ -718,7 +765,7 @@
 
 <script src="vendor/jspdf.umd.min.js"></script>
 <script src="vendor/jsQR.js"></script>
-<script type="module" src="assets/js/main.js"></script>
+<script type="module" src="assets/js/main.js?v=8"></script>
 
 </body>
 </html>

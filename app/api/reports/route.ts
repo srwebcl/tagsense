@@ -43,11 +43,35 @@ export const POST = withErrorLogging("reports", async (request: Request) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
   await uploads.upload(key, bytes, { contentType: "application/pdf" });
 
+  let finalFolio: string | null = typeof folio === "string" && folio.trim() ? folio.trim() : null;
+
+  // Si no viene folio o ya existe en el tenant, generar el siguiente disponible para evitar 500
+  if (finalFolio) {
+    const existing = await pool.query(
+      `select 1 from reports where tenant_id = $1 and folio = $2 limit 1`,
+      [appUser.tenant_id, finalFolio]
+    );
+    if ((existing.rowCount ?? 0) > 0) {
+      finalFolio = null;
+    }
+  }
+
+  if (!finalFolio) {
+    const seqResult = await pool.query<{ next_num: string }>(
+      `select coalesce(max(nullif(regexp_replace(folio, '^INF-', ''), '')::integer), 0) + 1 as next_num
+       from reports
+       where tenant_id = $1 and folio ~ '^INF-[0-9]+$'`,
+      [appUser.tenant_id]
+    );
+    const nextNum = seqResult.rows[0]?.next_num || 1;
+    finalFolio = `INF-${String(nextNum).padStart(4, "0")}`;
+  }
+
   const result = await pool.query(
     `insert into reports (tenant_id, intervention_id, file_url, folio, generated_at)
      values ($1, $2, $3, $4, now())
      returning id, folio, generated_at`,
-    [appUser.tenant_id, interventionId, key, typeof folio === "string" ? folio : null]
+    [appUser.tenant_id, interventionId, key, finalFolio]
   );
 
   const url = await uploads.url(key, { expiresIn: 3600 });
@@ -61,7 +85,7 @@ export const POST = withErrorLogging("reports", async (request: Request) => {
 
   // Enviar notificación por correo mediante Resend (al técnico y al admin)
   enviarNotificacionInforme({
-    folio: typeof folio === "string" ? folio : null,
+    folio: finalFolio,
     pdfBytes: bytes,
     technician: {
       email: intervention.technician_email || appUser.email,

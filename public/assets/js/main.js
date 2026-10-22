@@ -6,8 +6,8 @@
 // destino, escaneo QR disparado desde el círculo NFC). El resto de la
 // navegación vive directamente en el módulo dueño de cada pantalla.
 
-import { goTo } from './core.js';
-import { idActivoDesdeUrl, resolverActivoEscaneado, iniciarModoLectura, mostrarHintLectura } from './scan.js';
+import { goTo, mostrarToast } from './core.js';
+import { idActivoDesdeUrl, resolverActivoEscaneado, iniciarModoLectura, mostrarHintLectura, activoActualId } from './scan.js';
 import { abrirEscanerQR } from './qr.js';
 import { requiereLogin, confirmarSesionInicial } from './auth.js';
 import { cargarSolicitudes } from './solicitudes.js';
@@ -22,13 +22,50 @@ import './ui-misc.js';
 import './documentos.js';
 import './instructivos.js';
 import './componentes.js';
-import './historial.js';
+import './historial.js?v=8';
 import './connection.js';
 import './pwa-install.js';
 
 // ---- El círculo NFC también abre el escáner QR al tocarlo ----
 document.getElementById('nfc-circle').addEventListener('click', () => {
   abrirEscanerQR();
+});
+
+// ---- Menú inferior fijo (Bottom Navigation) ----
+document.getElementById('nav-btn-read')?.addEventListener('click', () => {
+  goTo('step-read');
+});
+
+document.getElementById('nav-btn-ficha')?.addEventListener('click', async () => {
+  if (!activoActualId) {
+    mostrarToast('Escanea un activo para ver su ficha técnica');
+    goTo('step-read');
+    return;
+  }
+  if (await requiereLogin('ficha')) return;
+  goTo('step-confirm-3');
+  cargarSolicitudes();
+});
+
+document.getElementById('nav-btn-asistente')?.addEventListener('click', async () => {
+  if (!activoActualId) {
+    mostrarToast('Escanea un activo para consultar al asistente');
+    goTo('step-read');
+    return;
+  }
+  if (await requiereLogin('asistente')) return;
+  goTo('step-asistente');
+  initChat();
+});
+
+document.getElementById('nav-btn-informe')?.addEventListener('click', async () => {
+  if (!activoActualId) {
+    mostrarToast('Escanea un activo para generar un informe');
+    goTo('step-read');
+    return;
+  }
+  if (await requiereLogin('informe')) return;
+  abrirFormularioInforme();
 });
 
 // ---- Puntos donde se pide login a mitad de camino (nunca para identificar el activo) ----

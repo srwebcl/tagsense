@@ -2,7 +2,7 @@
 
 // Subir este número obliga a los dispositivos ya instalados a descargar la nueva versión
 // y purgar la caché anterior (ver evento 'activate').
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 
 // Todo lo que la app necesita para funcionar sin conexión, incluido el primer arranque offline.
@@ -82,6 +82,21 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // En entorno local de desarrollo (localhost o 127.0.0.1), usar siempre red primero (network-first)
+  // para que los cambios en fichas, estilos y scripts se vean de inmediato.
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    event.respondWith(
+      fetch(request).then((resp) => {
+        if (resp && resp.ok && !resp.redirected) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
