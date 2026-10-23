@@ -161,7 +161,14 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
     return Response.json({ error: { code: "bad_request", message: "Falta asset_id o message." } }, { status: 400 });
   }
 
-  // 1. FUENTE 2 (Ficha del activo): Carga completa de metadatos, specs y componentes
+  // 1. Iniciar en paralelo Voyage embedding y tipos de ficha para máxima agilidad
+  const embedPromise = embedQuery(message).catch((err) => {
+    console.warn(`[assistant/chat] Voyage no disponible (tenant ${appUser.tenant_id}):`, err);
+    return null;
+  });
+  const tiposFichaPromise = listarTiposFicha(appUser.tenant_id).catch(() => []);
+
+  // 2. FUENTE 2 (Ficha del activo): Carga de datos maestros del equipo
   const assetResult = await pool.query(
     `select id, name, model, serial_number, status, location, hour_meter,
             asset_type, manufacturer, manufacture_year, specs
@@ -176,32 +183,29 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   }
   const realAssetId = asset.id;
 
-  const componentsResult = await pool.query(
-    `select fc.slug, fc.name
-     from asset_components ac
-     join fault_categories fc on fc.slug = ac.category_slug
-     where ac.tenant_id = $1 and ac.asset_id = $2
-     order by fc.name asc`,
-    [appUser.tenant_id, realAssetId]
-  );
+  // Cargar en paralelo componentes y notas técnicas del activo
+  const [componentsResult, fichasResult] = await Promise.all([
+    pool.query(
+      `select fc.slug, fc.name
+       from asset_components ac
+       join fault_categories fc on fc.slug = ac.category_slug
+       where ac.tenant_id = $1 and ac.asset_id = $2
+       order by fc.name asc`,
+      [appUser.tenant_id, realAssetId]
+    ),
+    pool.query(
+      `select ad.title, ad.category_slug, ad.field_type_slug, coalesce(ad.raw_text, '') as content
+       from asset_documents ad
+       where ad.tenant_id = $1 and ad.asset_id = $2 and ad.category_slug is not null
+       order by ad.category_slug, ad.field_type_slug`,
+      [appUser.tenant_id, realAssetId]
+    ),
+  ]);
   const componentes = componentsResult.rows;
-
-  const fichasResult = await pool.query(
-    `select ad.title, ad.category_slug, ad.field_type_slug, coalesce(ad.raw_text, '') as content
-     from asset_documents ad
-     where ad.tenant_id = $1 and ad.asset_id = $2 and ad.category_slug is not null
-     order by ad.category_slug, ad.field_type_slug`,
-    [appUser.tenant_id, realAssetId]
-  );
   const fichasSistemas = fichasResult.rows;
 
-  // 2. FUENTE 1 (Documentación PDF / Manuales): Embedding vectorial + re-ranking
-  let queryVector: number[] | null = null;
-  try {
-    queryVector = await embedQuery(message);
-  } catch (err) {
-    console.error(`[assistant/chat] Voyage no disponible (tenant ${appUser.tenant_id}, asset ${realAssetId}):`, err);
-  }
+  // Esperar el vector de búsqueda (que corrió en paralelo con la BD)
+  const queryVector: number[] | null = await embedPromise;
 
   const chunksResult = queryVector
     ? await pool.query(
@@ -243,11 +247,13 @@ export const POST = withErrorLogging("assistant/chat", async (request: Request) 
   }
 
   const keywords = extraerPalabrasClave(message, asset.name);
-  const tiposFicha = await listarTiposFicha(appUser.tenant_id);
+  const tiposFicha = await tiposFichaPromise;
   const fieldTypeSlug = detectarTipoFichaSolicitado(keywords, tiposFicha);
   const chunksOrdenados = reordenarPorPalabrasClave(candidatos, keywords, categorySlug, fieldTypeSlug);
 
-  const sources = [...new Set(chunksOrdenados.map((r) => r.title))];
+  // Limitar a los 4 fragmentos más relevantes para reducir drásticamente el tamaño del prompt y la latencia
+  const chunksParaPrompt = chunksOrdenados.slice(0, 4);
+  const sources = [...new Set(chunksParaPrompt.map((r) => r.title))];
 
   // Construir bloque estructurado de Ficha Técnica
   const specsObj = (asset.specs && typeof asset.specs === "object" ? asset.specs : {}) as Record<string, string>;
@@ -284,9 +290,9 @@ Información Técnica de Sistemas:
 ${fichasSistemasStr}
 `.trim();
 
-  // Construir bloque de Manuales PDF
-  const manualContextBlock = chunksOrdenados.length
-    ? chunksOrdenados
+  // Construir bloque de Manuales PDF con los fragmentos más pertinentes
+  const manualContextBlock = chunksParaPrompt.length
+    ? chunksParaPrompt
         .map((r, i) => `<fragmento_manual numero="${i + 1}" documento="${r.title}">\n${r.content}\n</fragmento_manual>`)
         .join("\n\n")
     : "(No hay fragmentos de manual PDF indexados disponibles para esta consulta)";

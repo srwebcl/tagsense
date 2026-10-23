@@ -2,7 +2,7 @@
 
 // Subir este número obliga a los dispositivos ya instalados a descargar la nueva versión
 // y purgar la caché anterior (ver evento 'activate').
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = `tagsense-${CACHE_VERSION}`;
 
 // Todo lo que la app necesita para funcionar sin conexión, incluido el primer arranque offline.

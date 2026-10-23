@@ -53,6 +53,11 @@ export function resetChatParaActivo(nuevoId) {
   }
 }
 
+function getChatTime() {
+  const now = new Date();
+  return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 export function initChat(forzar = false) {
   const activo = ACTIVOS[activoActualId];
   const nombreEquipo = activo ? activo.nombre : 'este equipo';
@@ -63,7 +68,7 @@ export function initChat(forzar = false) {
   // Actualizar encabezado del chat con el equipo actual
   const headerInfo = document.getElementById('chat-equipo-info');
   if (headerInfo && activo) {
-    headerInfo.textContent = `${nombreEquipo} · ${serieEquipo}`;
+    headerInfo.textContent = `${nombreEquipo} · En línea`;
   }
 
   // Si ya estaba inicializado para este mismo activo y no se fuerza, solo scrollear
@@ -79,6 +84,12 @@ export function initChat(forzar = false) {
   chatSuggestions.innerHTML = '';
   chatInput.value = '';
   chatSendBtn.disabled = true;
+
+  // Divisor de fecha estilo WhatsApp
+  const datePill = document.createElement('div');
+  datePill.className = 'wa-date-pill';
+  datePill.innerHTML = '<span>HOY</span>';
+  chatMessages.appendChild(datePill);
 
   appendBotBubble(
     `Hola, soy el asistente técnico de TAGSENSE. He analizado la ficha técnica y manuales de **${nombreEquipo}**.\n\nPuedes consultarme directamente o seleccionar una de las siguientes opciones para iniciar el diagnóstico:`
@@ -127,53 +138,91 @@ function renderSuggestions(lista) {
 function appendUserBubble(texto) {
   historialChat.push({ role: 'user', content: texto });
   if (historialChat.length > 12) historialChat = historialChat.slice(-12);
+  const timeStr = getChatTime();
   const row = document.createElement('div');
   row.className = 'chat-bubble-row user';
-  row.innerHTML = `<div class="chat-bubble"></div>`;
-  row.querySelector('.chat-bubble').textContent = texto;
+  row.innerHTML = `
+    <div class="chat-bubble">
+      <div class="chat-bubble-content"></div>
+      <div class="wa-msg-meta">
+        <span class="wa-msg-time">${timeStr}</span>
+        <span class="wa-checks" aria-label="Leído">
+          <svg viewBox="0 0 16 15" width="16" height="15" fill="none"><path d="M15.01 3.316l-7.79 7.79-4.01-4.01.7-.7 3.31 3.31 7.09-7.09.7.7zm-4.7 0l-.7-.7-4.01 4.01.7.7 4.01-4.01z" fill="currentColor"/></svg>
+        </span>
+      </div>
+    </div>
+  `;
+  row.querySelector('.chat-bubble-content').textContent = texto;
   chatMessages.appendChild(row);
   scrollChatToBottom();
 }
 
 function formatearTextoBot(texto) {
+  let clean = (texto || '').trim();
+  // Formatear encabezados markdown ### Título -> <strong>Título</strong>
+  clean = clean.replace(/^###?\s+(.+)$/gm, '<strong>$1</strong>');
+  // Reemplazar viñetas de asterisco/guión por puntos limpios
+  clean = clean.replace(/^[\*\-]\s+/gm, '• ');
+  // Eliminar líneas divisoras crudas ---
+  clean = clean.replace(/^\s*---\s*$/gm, '');
+
   const div = document.createElement('div');
-  div.textContent = texto || '';
+  div.textContent = clean;
   let html = div.innerHTML;
+
   // Negrita Markdown **texto** -> <strong>
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // Saltos de línea limpios
-  html = html.replace(/\n\n/g, '<div style="height:7px;"></div>').replace(/\n/g, '<br>');
+  // Saltos de línea limpios y espaciados
+  html = html.replace(/\n\n+/g, '<div style="height:6px;"></div>').replace(/\n/g, '<br>');
   return html;
 }
 
 function appendBotBubble(texto) {
   historialChat.push({ role: 'assistant', content: texto });
   if (historialChat.length > 12) historialChat = historialChat.slice(-12);
+  const timeStr = getChatTime();
   const row = document.createElement('div');
   row.className = 'chat-bubble-row bot';
   row.innerHTML = `
-    <div class="chat-avatar-sm">${BOT_AVATAR_SVG}</div>
-    <div class="chat-bubble"></div>
+    <div class="chat-bubble">
+      <div class="chat-bubble-content"></div>
+      <div class="wa-msg-meta">
+        <span class="wa-msg-time">${timeStr}</span>
+      </div>
+    </div>
   `;
-  const bubble = row.querySelector('.chat-bubble');
-  bubble.innerHTML = formatearTextoBot(texto);
+  const content = row.querySelector('.chat-bubble-content');
+  content.innerHTML = formatearTextoBot(texto);
   chatMessages.appendChild(row);
   scrollChatToBottom();
 }
 
 function showTyping() {
+  const statusEl = document.getElementById('chat-header-status');
+  if (statusEl && !statusEl.dataset.prevStatus) {
+    statusEl.dataset.prevStatus = statusEl.innerHTML;
+    statusEl.innerHTML = `<span class="wa-status-dot"></span> <span class="wa-typing-text">escribiendo...</span>`;
+  }
   const row = document.createElement('div');
   row.className = 'chat-bubble-row bot typing-row';
   row.id = 'typing-row';
   row.innerHTML = `
-    <div class="chat-avatar-sm">${BOT_AVATAR_SVG}</div>
-    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <div class="chat-bubble wa-typing-bubble">
+      <div class="wa-typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
   `;
   chatMessages.appendChild(row);
   scrollChatToBottom();
 }
 
 function hideTyping() {
+  const statusEl = document.getElementById('chat-header-status');
+  if (statusEl && statusEl.dataset.prevStatus) {
+    statusEl.innerHTML = statusEl.dataset.prevStatus;
+    delete statusEl.dataset.prevStatus;
+  }
   const row = document.getElementById('typing-row');
   if (row) row.remove();
 }
@@ -1014,3 +1063,8 @@ chatInput.addEventListener('keydown', (e) => {
 chatSendBtn.addEventListener('click', () => enviarPregunta(chatInput.value));
 
 document.getElementById('back-asistente').addEventListener('click', () => goTo('step-confirm-3'));
+
+const btnEscalarHeader = document.getElementById('btn-escalar-header');
+if (btnEscalarHeader) {
+  btnEscalarHeader.addEventListener('click', escalarASupervisor);
+}

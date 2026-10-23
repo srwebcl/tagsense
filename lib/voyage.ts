@@ -16,6 +16,7 @@ async function embed(input: string[], inputType: VoyageInputType): Promise<numbe
       "content-type": "application/json",
     },
     body: JSON.stringify({ input, model: MODEL, input_type: inputType }),
+    signal: AbortSignal.timeout(3000),
   });
 
   if (!resp.ok) {

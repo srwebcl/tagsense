@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "15mb",
     },
+    agentUpgrade: "security",
   },
   // rewrite (no redirect): la URL se queda en "/" — el visitante nunca ve
   // ".html" en la barra de direcciones. La app de campo (PWA) sigue siendo el

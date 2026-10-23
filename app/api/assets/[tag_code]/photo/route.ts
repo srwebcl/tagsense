@@ -7,10 +7,10 @@ import { uploads } from "@/lib/storage";
 // y luego la sirve directamente desde memoria/disco local (0 ms de demora, 0 costo en Vercel).
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ tag_code: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { tag_code: id } = await params;
 
     // Acepta tanto UUID del activo como tag_code (ej. ACT-001)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
